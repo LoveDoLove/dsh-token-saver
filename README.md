@@ -1,101 +1,93 @@
-# dsh-token-saver
+# DSH Token Saver
 
-DeepSeek Harness plugin: aggressive token optimization without affecting task quality. Trims tool results with RTK, prompt shaping via Caveman & Ponytail, instant local responses, manages context-window pressure, optional LLM-summary compaction, and a stable prompt-cache layout.
+**A configurable token-efficiency plugin for DeepSeek Harness (DSH).**
 
-Works globally across all supported DSH requests — not just through the Our Free Model gateway.
+[简体中文](README.zh-CN.md) · [Releases](https://github.com/LoveDoLove/dsh-token-saver/releases) · [Issues](https://github.com/LoveDoLove/dsh-token-saver/issues)
+
+DSH Token Saver reduces unnecessary context from verbose tool output and offers optional prompt shaping, context-pressure handling, local responses, and LLM-summary compaction. Optimizations are configurable and disabled or conservative by default where appropriate.
 
 ## Features
 
-| Feature | What it does | Config keys | Default |
-|---|---|---|---|
-| **RTK tool-output compaction** | Detects and compacts verbose tool outputs (git diff/status/log, grep, find, ls, tree, build logs, …) before they enter context | `rtkEnabled` | `false` |
-| **Caveman** | Compresses system prompt wording to a terse style | `cavemanLevel` (`off`/`lite`/`full`/`ultra`/`wenyan-lite`/`wenyan`/`wenyan-ultra`) | `off` |
-| **Ponytail** | Applies the lazy-senior-dev prompt-shaping strategy (smallest change that fully solves the task) | `ponytailLevel` (`off`/`lite`/`full`/`ultra`) | `off` |
-| **Local responses** | Answers five canonical probe shapes locally with zero tokens: quota, prefix, title, suggestion, filepath | `localResponsesEnabled`, `localResponses` (subset) | `false` / all five |
-| **Tool-result trim & fold** | Head/tail truncation and grep fold for large tool outputs | `mode`, `headBytes`, `tailBytes`, … | `conservative` |
-| **Context pressure** | Monitors token-meter pressure and triggers compaction when over threshold | `mode` (`balanced`/`aggressive`), `pressureThreshold` | `0.5` |
-| **LLM-summary compaction** | Optional compaction engine replacing basic compaction with an LLM summary | `llmSummaryEnabled` | `false` |
-| **Prompt-cache stability** | Stable system-prompt section ordering for better cache hits | `cacheStableSections` | `[]` |
+| Feature | Description | Default |
+|---|---|---|
+| Tool-output trimming | Keeps the head and tail of oversized tool results | Enabled in conservative mode |
+| Grep folding | Folds large grep results while retaining useful context | Enabled in conservative mode |
+| Context-pressure handling | Tracks context pressure and can trigger compaction in higher modes | Conservative mode |
+| RTK integration | Compacts supported command output through RTK | Off |
+| Caveman prompt shaping | Uses a configurable terse prompt style | Off |
+| Ponytail prompt shaping | Applies a minimal-change task-solving style | Off |
+| Local responses | Answers supported probe shapes locally without an LLM call | Off |
+| LLM-summary compaction | Optionally uses an LLM summary for compaction | Off |
+| Prompt-cache stability | Optionally stabilizes system-prompt section ordering | Off |
+| Web settings | Configure the plugin from **Settings → Token Saver** | Available on DSH Web |
 
 ## Install
 
+Install from the GitHub repository with DSH:
+
 ```bash
-pnpm add dsh-token-saver
+dsh plugin --profile web add github:LoveDoLove/dsh-token-saver
 ```
 
-Then add to your DSH bundle patch (`cordis.patch.yml`):
+If your DSH installation asks for build-script approval, follow the approval instructions printed by DSH/pnpm and retry the install. Then reload or restart the target DSH profile as required by your installation.
 
-```yaml
-- insert:
-    - id: dsh-token-saver
-      name: dsh-token-saver
-```
+> The GitHub repository and GitHub Releases are the source of truth for this project. Use a version-pinned release when one is available.
 
 ## Configuration
 
-All options are independently configurable. Example:
+The settings panel is available in DSH Web under **Settings → Token Saver**. You can also configure the plugin through its DSH bundle configuration.
+
+Example:
 
 ```yaml
 dsh-token-saver:
-  mode: balanced        # off | conservative | balanced | aggressive
-  rtkEnabled: true      # RTK tool-output compaction
-  cavemanLevel: lite    # off | lite | full | ultra | wenyan-lite | wenyan | wenyan-ultra
-  ponytailLevel: full   # off | lite | full | ultra
-  localResponsesEnabled: true
+  mode: conservative # off | conservative | balanced | aggressive
+  rtkEnabled: false
+  cavemanLevel: off # off | lite | full | ultra | wenyan-lite | wenyan | wenyan-ultra
+  ponytailLevel: off # off | lite | full | ultra
+  localResponsesEnabled: false
   localResponses: [quota, prefix, title, suggestion, filepath]
   llmSummaryEnabled: false
 ```
 
-### Defaults
+### Modes
 
-```ts
-{
-  mode: 'conservative',
-  preserveStructure: true,
-  headBytes: 16384,
-  tailBytes: 8192,
-  grepMaxMatches: 30,
-  grepContextLines: 2,
-  grepHeadBytes: 8192,
-  grepTailBytes: 4096,
-  pressureThreshold: 0.5,
-  compactPressureThreshold: 0.5,
-  llmSummaryEnabled: false,
-  llmSummaryPrompt: '',
-  llmSummaryMaxInputTokens: 16000,
-  replaceBasicCompaction: false,
-  includeToolNames: [],
-  excludeToolNames: [],
-  cacheStableSections: [],
-  rtkEnabled: false,
-  cavemanLevel: 'off',
-  ponytailLevel: 'off',
-  localResponsesEnabled: false,
-  localResponses: ['quota', 'prefix', 'title', 'suggestion', 'filepath'],
-}
-```
+- **off** — disables token-saving transformations.
+- **conservative** — trims/folds oversized tool output while retaining the normal DSH compaction path.
+- **balanced** — enables additional context-pressure handling.
+- **aggressive** — enables more extensive compaction behavior; review the configuration before enabling it.
+
+Exact behavior depends on the individual options and the installed DSH version. Check the settings panel and configuration defaults for the current build.
+
+## Safety behavior
+
+- **Fail open:** if an optimization fails or produces an unusable result, the original content is preserved.
+- **Error output is preserved:** tool results marked as errors are not compacted by the tool-output filter.
+- **Opt-in extras:** RTK, prompt shaping, local responses, and LLM-summary compaction are independently configurable.
+- **No quality guarantee:** token reduction can change the information visible to a model. Review settings carefully, especially for aggressive compaction.
 
 ## Compatibility
 
 Designed to coexist with:
 
-- **Billion Context** — ACP markers and compressed summaries pass through untouched; RTK skips outputs containing ACP tags (idempotency guard).
-- **OmniRoute** — request routing options (provider, model, tools) are preserved; no re-transformation of the same request.
-- **Our Free Model** — detects the OFM marker (`<!-- ofm-token-saver -->`) and will not double-inject prompt shaping already applied by the gateway.
+- **Billion Context** — ACP-marked content is preserved by the relevant output filter.
+- **OmniRoute** — request routing fields are intended to remain intact.
+- **Our Free Model** — detects the `<!-- ofm-token-saver -->` marker to avoid applying prompt shaping twice.
 
-## Fail-open policy
-
-Every optional optimization fails open: if a filter throws, returns a non-string, or produces a larger/empty output, the original content is preserved untouched. Error tool results are never compacted.
+Compatibility depends on the versions and configuration of the surrounding plugins. Report reproducible issues with version details.
 
 ## Development
 
+Requirements: Node.js `>=22.19.0` and pnpm.
+
 ```bash
-pnpm build      # tsc -p tsconfig.build.json
-pnpm typecheck  # tsc --noEmit
-pnpm test       # vitest run
-pnpm lint       # oxlint src test
+pnpm install
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
 ```
 
 ## License
 
-MIT — see [LICENSE](./LICENSE). Portions ported from `dsh-our-free-model` (MIT, Copyright (c) 2026 Ebony-Vinyl) and `dsh-token-saver` reference implementation (MIT, Copyright (c) 2026 dsh-token-saver contributors), with attribution preserved.
+MIT. See [LICENSE](LICENSE). Third-party-derived portions retain their required attribution; see the source and license notices for details.
