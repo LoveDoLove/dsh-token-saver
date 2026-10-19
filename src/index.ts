@@ -178,7 +178,7 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
   }
 
   if (typeof scope.effect === 'function') {
-    scope.effect(() => {
+    scope.effect(() => () => {
       ownLogger.info('token-saver: unloading plugin')
     })
   }

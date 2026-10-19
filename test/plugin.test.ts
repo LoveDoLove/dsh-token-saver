@@ -14,7 +14,12 @@ function createScope() {
       if (!listeners.has(event)) listeners.set(event, [])
       listeners.get(event)!.push(listener)
     }),
-    effect: vi.fn((d: () => void) => effects.push(d)),
+    effect: vi.fn((action: () => void | (() => void)) => {
+      const disposer = action()
+      if (typeof disposer === 'function') {
+        effects.push(disposer)
+      }
+    }),
     get: vi.fn((key: string) => {
       if (key === 'compaction') return { stub: true }
       if (key === 'tokenMeter') return undefined
@@ -76,6 +81,25 @@ describe('plugin entry & Cordis registration', () => {
     const scope = createScope()
     await apply(scope, { mode: 'off' })
     expect(scope.effects.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('does not log unloading on activation, only logs when disposed', async () => {
+    const ctx = new Context()
+    ctx.provide('tools', true)
+    const logs: string[] = []
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation((...args) => {
+      logs.push(args.join(' '))
+    })
+    try {
+      const fiber = ctx.plugin(plugin, { mode: 'conservative' })
+      await Promise.resolve()
+      expect(logs.some((l) => l.includes('unloading plugin'))).toBe(false)
+
+      await fiber.dispose()
+      expect(logs.some((l) => l.includes('unloading plugin'))).toBe(true)
+    } finally {
+      infoSpy.mockRestore()
+    }
   })
 
   it('does not replace compaction in conservative mode', async () => {
