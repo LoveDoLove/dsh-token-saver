@@ -4,11 +4,10 @@ import { decidePostTool } from './strategies/tool-result-trim.js'
 import { decidePreStep } from './strategies/context-pressure.js'
 import { stabilizeForCache } from './strategies/prompt-cache.js'
 import { LlmSummaryCompactionEngine, DEFAULT_COMPACTION_PROMPT } from './strategies/llm-summary.js'
-import { createRtkStats, type RtkStats } from './rtk/index.js'
+import { createRtkStats, compressMessages, type RtkStats } from './rtk/index.js'
 import {
   activePrompts,
-  hasAnyPromptShaping,
-  injectIntoSystemPrompt,
+  injectSystem,
 } from './prompt-shaping/index.js'
 import {
   detectOptimization,
@@ -145,21 +144,20 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
         })
         if (active.length > 0 && req) {
           const promptText = active.map((p) => p.text).join('\n\n')
-          const sys = typeof req.system === 'string' ? req.system : ''
-          if (!hasAnyPromptShaping(sys)) {
-            const injected = injectIntoSystemPrompt(sys, promptText)
-            if (injected.injected) {
-              // Mutate the request options in place: the waterfall passes the
-              // SAME options object downstream, so writing system here is how
-              // the shaped prompt reaches the real model request.
-              try {
-                ;(options as { system?: string }).system = injected.text
-              } catch {
-                // Frozen/readonly options: skip injection, fail open.
-              }
-              return next()
-            }
+          try {
+            injectSystem(req, undefined, promptText)
+          } catch {
+            // Frozen/readonly options: skip injection, fail open.
           }
+        }
+      }
+
+      // C) In-flight request tool message compaction (RTK)
+      if (resolved.rtkEnabled && req) {
+        try {
+          compressMessages(req, { enabled: true })
+        } catch {
+          // Frozen/readonly options: skip, fail open.
         }
       }
     } catch (err) {
@@ -395,5 +393,6 @@ export { resolveConfig, TokenSaverSchema, DEFAULTS }
 export * from './rtk/index.js'
 export * from './prompt-shaping/index.js'
 export * from './local-responses/index.js'
+export * from './token-saver/index.js'
 export type { ResolvedConfig, TokenSaverConfig } from './internal.js'
 export type { ToolContentBlock, ToolResultLike, ToolExecutionLike } from './types.js'

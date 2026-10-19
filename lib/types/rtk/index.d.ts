@@ -46,3 +46,4 @@ export * from './filters/smartTruncate.js';
 export * from './filters/readNumbered.js';
 export * from './filters/searchList.js';
 export * from './filters/buildOutput.js';
+export * from './compress.js';

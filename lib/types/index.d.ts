@@ -37,5 +37,6 @@ export { resolveConfig, TokenSaverSchema, DEFAULTS };
 export * from './rtk/index.js';
 export * from './prompt-shaping/index.js';
 export * from './local-responses/index.js';
+export * from './token-saver/index.js';
 export type { ResolvedConfig, TokenSaverConfig } from './internal.js';
 export type { ToolContentBlock, ToolResultLike, ToolExecutionLike } from './types.js';
