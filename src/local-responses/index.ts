@@ -2,6 +2,6 @@
  * Re-exports for the local responses module.
  */
 
-export * from './command'
-export * from './detectors'
-export * from './stream'
+export * from './command.js'
+export * from './detectors.js'
+export * from './stream.js'

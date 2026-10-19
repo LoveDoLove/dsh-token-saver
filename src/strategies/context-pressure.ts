@@ -12,7 +12,7 @@ import type {
   ResolvedConfig,
   TelemetryHook,
   TokenMeterLike,
-} from '../internal'
+} from '../internal.js'
 
 export interface ContextPressureOptions {
   readonly config: ResolvedConfig

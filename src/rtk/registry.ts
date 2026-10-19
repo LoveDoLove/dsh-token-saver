@@ -3,19 +3,19 @@
  * Ported from dsh-our-free-model / open-sse/rtk under MIT license.
  */
 
-import type { RtkFilterFn } from './applyFilter'
-import { gitDiff } from './filters/gitDiff'
-import { gitStatus } from './filters/gitStatus'
-import { gitLog } from './filters/gitLog'
-import { grep } from './filters/grep'
-import { find } from './filters/find'
-import { ls } from './filters/ls'
-import { tree } from './filters/tree'
-import { dedupLog } from './filters/dedupLog'
-import { smartTruncate } from './filters/smartTruncate'
-import { readNumbered } from './filters/readNumbered'
-import { searchList } from './filters/searchList'
-import { buildOutput } from './filters/buildOutput'
+import type { RtkFilterFn } from './applyFilter.js'
+import { gitDiff } from './filters/gitDiff.js'
+import { gitStatus } from './filters/gitStatus.js'
+import { gitLog } from './filters/gitLog.js'
+import { grep } from './filters/grep.js'
+import { find } from './filters/find.js'
+import { ls } from './filters/ls.js'
+import { tree } from './filters/tree.js'
+import { dedupLog } from './filters/dedupLog.js'
+import { smartTruncate } from './filters/smartTruncate.js'
+import { readNumbered } from './filters/readNumbered.js'
+import { searchList } from './filters/searchList.js'
+import { buildOutput } from './filters/buildOutput.js'
 
 export const REGISTRY = new Map<string, RtkFilterFn>([
   ['git-diff', gitDiff],

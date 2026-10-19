@@ -3,8 +3,8 @@
  * Ported from dsh-our-free-model / open-sse/rtk under MIT license.
  */
 
-import { FIND_PER_DIR_MAX, FIND_TOTAL_DIR_MAX } from '../constants'
-import type { RtkFilterFn } from '../applyFilter'
+import { FIND_PER_DIR_MAX, FIND_TOTAL_DIR_MAX } from '../constants.js'
+import type { RtkFilterFn } from '../applyFilter.js'
 
 export const find: RtkFilterFn = function find(text: string, perDirMax = FIND_PER_DIR_MAX, totalDirMax = FIND_TOTAL_DIR_MAX): string {
   const lines = text.split('\n').filter((l) => l.trim().length > 0)

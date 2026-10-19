@@ -5,8 +5,8 @@
  * Ported from dsh-our-free-model / open-sse/rtk under MIT license.
  */
 
-import { DEPRECATION_KEEP } from '../constants'
-import type { RtkFilterFn } from '../applyFilter'
+import { DEPRECATION_KEEP } from '../constants.js'
+import type { RtkFilterFn } from '../applyFilter.js'
 
 // Cargo/rustc error continuation: " --> file:line", "  |", "N | code", "  = note: ..."
 const RE_CARGO_ERR_CONT = /^\s*(-->|\||\d+\s*\||=)/

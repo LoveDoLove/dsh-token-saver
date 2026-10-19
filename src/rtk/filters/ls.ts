@@ -3,8 +3,8 @@
  * Ported from dsh-our-free-model / open-sse/rtk under MIT license.
  */
 
-import { LS_NOISE_DIRS } from '../constants'
-import type { RtkFilterFn } from '../applyFilter'
+import { LS_NOISE_DIRS } from '../constants.js'
+import type { RtkFilterFn } from '../applyFilter.js'
 
 export const ls: RtkFilterFn = function ls(text: string): string {
   const lines = text.split('\n')

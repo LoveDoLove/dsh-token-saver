@@ -9,10 +9,10 @@
  * - Any filter failure fails open (original text preserved).
  */
 
-import { RAW_CAP, MIN_COMPRESS_SIZE } from './constants'
-import { safeApply, type RtkFilterFn } from './applyFilter'
-import { autoDetectFilter } from './autodetect'
-import { resolveFilter } from './registry'
+import { RAW_CAP, MIN_COMPRESS_SIZE } from './constants.js'
+import { safeApply, type RtkFilterFn } from './applyFilter.js'
+import { autoDetectFilter } from './autodetect.js'
+import { resolveFilter } from './registry.js'
 
 export interface RtkHit {
   readonly filter: string
@@ -108,21 +108,21 @@ export function formatRtkLog(stats: RtkStats): string | null {
   return `[RTK] saved ${stats.saved} / ${stats.bytesBefore} bytes (${percent}%) via [${filterNames}] across ${stats.hits.length} hit(s)`
 }
 
-export * from './constants'
-export * from './applyFilter'
-export * from './hitLine'
-export * from './autodetect'
-export * from './registry'
-export * from './filters/gitDiff'
-export * from './filters/gitStatus'
-export * from './filters/gitLog'
-export * from './filters/grep'
-export * from './filters/find'
-export * from './filters/ls'
-export * from './filters/tree'
-export * from './filters/dedupLog'
-export * from './filters/smartTruncate'
-export * from './filters/readNumbered'
-export * from './filters/searchList'
-export * from './filters/buildOutput'
+export * from './constants.js'
+export * from './applyFilter.js'
+export * from './hitLine.js'
+export * from './autodetect.js'
+export * from './registry.js'
+export * from './filters/gitDiff.js'
+export * from './filters/gitStatus.js'
+export * from './filters/gitLog.js'
+export * from './filters/grep.js'
+export * from './filters/find.js'
+export * from './filters/ls.js'
+export * from './filters/tree.js'
+export * from './filters/dedupLog.js'
+export * from './filters/smartTruncate.js'
+export * from './filters/readNumbered.js'
+export * from './filters/searchList.js'
+export * from './filters/buildOutput.js'
 

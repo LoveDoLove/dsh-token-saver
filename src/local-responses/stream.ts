@@ -3,7 +3,7 @@
  * Emits canonical DSH StreamChunk protocol items: block-start, text-delta, block-end, usage, finish.
  */
 
-import type { LocalAnswer } from './detectors'
+import type { LocalAnswer } from './detectors.js'
 
 export interface LocalStreamChunk {
   readonly type: 'block-start' | 'text-delta' | 'block-end' | 'usage' | 'finish'

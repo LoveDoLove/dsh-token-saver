@@ -5,12 +5,12 @@
  * Supports both DSH GenerateOptions and Anthropic wire request shapes.
  */
 
-import type { LocalOptimizationKind } from '../types'
+import type { LocalOptimizationKind } from '../types.js'
 import {
   extractCommandPrefix,
   extractFilepathsFromCommand,
   truncateOutput,
-} from './command'
+} from './command.js'
 
 export const OPTIMIZATIONS: readonly LocalOptimizationKind[] = [
   'quota',

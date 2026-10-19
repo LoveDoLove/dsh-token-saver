@@ -10,16 +10,16 @@
  * with the original content preserved verbatim.
  */
 
-import { truncate } from '../lib/truncate'
-import { foldGrepResult } from '../lib/fold-grep'
-import { compressText, type RtkStats } from '../rtk'
+import { truncate } from '../lib/truncate.js'
+import { foldGrepResult } from '../lib/fold-grep.js'
+import { compressText, type RtkStats } from '../rtk/index.js'
 import type {
   PostToolDecision,
   ResolvedConfig,
   TelemetryHook,
   ToolContentBlock,
   ToolResultLike,
-} from '../internal'
+} from '../internal.js'
 
 export interface ToolResultTrimOptions {
   readonly config: ResolvedConfig

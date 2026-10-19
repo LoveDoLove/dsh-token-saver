@@ -9,7 +9,7 @@ import type {
   Logger,
   ResolvedConfig,
   TelemetryHook,
-} from '../internal'
+} from '../internal.js'
 
 export interface LlmSummaryEngineDeps {
   readonly config: ResolvedConfig

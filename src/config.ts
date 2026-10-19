@@ -4,7 +4,7 @@ import type {
   PonytailLevel,
   SessionMode,
   TokenSaverConfig,
-} from './types'
+} from './types.js'
 
 export type { SessionMode, TokenSaverConfig, CavemanLevel, PonytailLevel, LocalOptimizationKind }
 

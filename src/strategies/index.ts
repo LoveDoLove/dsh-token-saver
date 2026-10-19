@@ -4,20 +4,20 @@ export {
   type ToolResultTrimOptions,
   type ToolResultTrimResult,
   type PostToolPayloadLike,
-} from './tool-result-trim'
+} from './tool-result-trim.js'
 
 export {
   decidePreStep,
   type ContextPressureOptions,
   type ContextPressureDecision,
-} from './context-pressure'
+} from './context-pressure.js'
 
 export {
   stabilizeForCache,
   markCacheable,
   type StableLayoutInput,
   type StableLayoutResult,
-} from './prompt-cache'
+} from './prompt-cache.js'
 
 export {
   LlmSummaryCompactionEngine,
@@ -27,4 +27,4 @@ export {
   type LlmSummaryInput,
   type LlmSummaryOutput,
   type LlmSummaryCompactionResult,
-} from './llm-summary'
+} from './llm-summary.js'

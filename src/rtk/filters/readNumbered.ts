@@ -3,8 +3,8 @@
  * Ported from dsh-our-free-model / open-sse/rtk under MIT license.
  */
 
-import { READ_NUMBERED_MIN_HIT_RATIO, SMART_TRUNCATE_MIN_LINES, SMART_TRUNCATE_HEAD, SMART_TRUNCATE_TAIL } from '../constants'
-import type { RtkFilterFn } from '../applyFilter'
+import { READ_NUMBERED_MIN_HIT_RATIO, SMART_TRUNCATE_MIN_LINES, SMART_TRUNCATE_HEAD, SMART_TRUNCATE_TAIL } from '../constants.js'
+import type { RtkFilterFn } from '../applyFilter.js'
 
 const NUMBERED_LINE_RE = /^\s*(\d+)[:|]\s*(.*)$/
 

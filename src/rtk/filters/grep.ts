@@ -3,9 +3,9 @@
  * Ported from dsh-our-free-model / open-sse/rtk under MIT license.
  */
 
-import { GREP_PER_FILE_MAX } from '../constants'
-import { parseGrepOutput } from '../hitLine'
-import type { RtkFilterFn } from '../applyFilter'
+import { GREP_PER_FILE_MAX } from '../constants.js'
+import { parseGrepOutput } from '../hitLine.js'
+import type { RtkFilterFn } from '../applyFilter.js'
 
 export const grep: RtkFilterFn = function grep(text: string, perFileMax = GREP_PER_FILE_MAX): string {
   const { groups, totalHits } = parseGrepOutput(text)

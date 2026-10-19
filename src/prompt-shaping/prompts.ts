@@ -6,7 +6,7 @@
  * Ponytail: Compresses the WORK (YAGNI, smallest change, simple code).
  */
 
-import type { CavemanLevel, PonytailLevel } from '../types'
+import type { CavemanLevel, PonytailLevel } from '../types.js'
 
 export const CAVEMAN_LEVELS: readonly CavemanLevel[] = [
   'off',

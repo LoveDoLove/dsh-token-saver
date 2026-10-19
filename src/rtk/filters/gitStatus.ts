@@ -3,8 +3,8 @@
  * Ported from dsh-our-free-model / open-sse/rtk git::format_status_output under MIT license.
  */
 
-import { STATUS_MAX_FILES, STATUS_MAX_UNTRACKED } from '../constants'
-import type { RtkFilterFn } from '../applyFilter'
+import { STATUS_MAX_FILES, STATUS_MAX_UNTRACKED } from '../constants.js'
+import type { RtkFilterFn } from '../applyFilter.js'
 
 export const gitStatus: RtkFilterFn = function gitStatus(status: string): string {
   const lines = status.split('\n')

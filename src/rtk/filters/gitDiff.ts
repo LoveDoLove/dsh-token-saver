@@ -3,8 +3,8 @@
  * Ported from dsh-our-free-model / open-sse/rtk git::compact_diff under MIT license.
  */
 
-import { GIT_DIFF_HUNK_MAX_LINES } from '../constants'
-import type { RtkFilterFn } from '../applyFilter'
+import { GIT_DIFF_HUNK_MAX_LINES } from '../constants.js'
+import type { RtkFilterFn } from '../applyFilter.js'
 
 export const gitDiff: RtkFilterFn = function gitDiff(diff: string, maxLines = GIT_DIFF_HUNK_MAX_LINES): string {
   if (diff.includes('[full diff: rtk git diff --no-compact]')) {

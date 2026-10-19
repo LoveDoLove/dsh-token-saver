@@ -1,20 +1,20 @@
-import { resolveConfig, TokenSaverSchema, DEFAULTS } from './config'
-import type { ResolvedConfig, TokenSaverConfig } from './internal'
-import { decidePostTool } from './strategies/tool-result-trim'
-import { decidePreStep } from './strategies/context-pressure'
-import { stabilizeForCache } from './strategies/prompt-cache'
-import { LlmSummaryCompactionEngine, DEFAULT_COMPACTION_PROMPT } from './strategies/llm-summary'
-import { createRtkStats, type RtkStats } from './rtk'
+import { resolveConfig, TokenSaverSchema, DEFAULTS } from './config.js'
+import type { ResolvedConfig, TokenSaverConfig } from './internal.js'
+import { decidePostTool } from './strategies/tool-result-trim.js'
+import { decidePreStep } from './strategies/context-pressure.js'
+import { stabilizeForCache } from './strategies/prompt-cache.js'
+import { LlmSummaryCompactionEngine, DEFAULT_COMPACTION_PROMPT } from './strategies/llm-summary.js'
+import { createRtkStats, type RtkStats } from './rtk/index.js'
 import {
   activePrompts,
   hasAnyPromptShaping,
   injectIntoSystemPrompt,
-} from './prompt-shaping'
+} from './prompt-shaping/index.js'
 import {
   detectOptimization,
   createLocalResponseStream,
   type RequestLike,
-} from './local-responses'
+} from './local-responses/index.js'
 import type {
   PostToolDecision,
   PreStepDecisionLike,
@@ -22,7 +22,7 @@ import type {
   ToolResultLike,
   AgentLike,
   TokenMeterLike,
-} from './types'
+} from './types.js'
 
 export interface TokenSaverPluginOptions {
   readonly config?: TokenSaverConfig
@@ -370,12 +370,12 @@ export const plugin = {
 export default plugin
 
 export { DEFAULT_COMPACTION_PROMPT, LlmSummaryCompactionEngine }
-export { decidePostTool } from './strategies/tool-result-trim'
-export { decidePreStep } from './strategies/context-pressure'
-export { stabilizeForCache } from './strategies/prompt-cache'
+export { decidePostTool } from './strategies/tool-result-trim.js'
+export { decidePreStep } from './strategies/context-pressure.js'
+export { stabilizeForCache } from './strategies/prompt-cache.js'
 export { resolveConfig, TokenSaverSchema, DEFAULTS }
-export * from './rtk'
-export * from './prompt-shaping'
-export * from './local-responses'
-export type { ResolvedConfig, TokenSaverConfig } from './internal'
-export type { ToolContentBlock, ToolResultLike, ToolExecutionLike } from './types'
+export * from './rtk/index.js'
+export * from './prompt-shaping/index.js'
+export * from './local-responses/index.js'
+export type { ResolvedConfig, TokenSaverConfig } from './internal.js'
+export type { ToolContentBlock, ToolResultLike, ToolExecutionLike } from './types.js'

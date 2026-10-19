@@ -3,8 +3,8 @@
  * Ported from dsh-our-free-model / open-sse/rtk under MIT license.
  */
 
-import { SEARCH_LIST_PER_DIR_MAX, SEARCH_LIST_TOTAL_DIR_MAX } from '../constants'
-import type { RtkFilterFn } from '../applyFilter'
+import { SEARCH_LIST_PER_DIR_MAX, SEARCH_LIST_TOTAL_DIR_MAX } from '../constants.js'
+import type { RtkFilterFn } from '../applyFilter.js'
 
 export const searchList: RtkFilterFn = function searchList(
   text: string,

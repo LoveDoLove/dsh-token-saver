@@ -23,7 +23,7 @@ export type {
   PonytailLevel,
   LocalOptimizationKind,
   CordisScope,
-} from './types'
+} from './types.js'
 
-export { TokenSaverSchema, resolveConfig, DEFAULTS } from './config'
-export type { ResolvedConfig, ConfigDescriptor } from './config'
+export { TokenSaverSchema, resolveConfig, DEFAULTS } from './config.js'
+export type { ResolvedConfig, ConfigDescriptor } from './config.js'

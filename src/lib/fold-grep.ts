@@ -1,4 +1,4 @@
-import { truncate } from './truncate'
+import { truncate } from './truncate.js'
 
 export interface GrepFoldOptions {
   readonly pattern?: string

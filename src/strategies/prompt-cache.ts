@@ -3,7 +3,7 @@
  * Ported from refs/dsh-token-saver under MIT license.
  */
 
-import type { ResolvedConfig, SystemPromptSection } from '../internal'
+import type { ResolvedConfig, SystemPromptSection } from '../internal.js'
 
 export interface StableLayoutInput {
   readonly sections: readonly SystemPromptSection[]

@@ -3,8 +3,8 @@
  * Ported from dsh-our-free-model / open-sse/rtk under MIT license.
  */
 
-import { DEDUP_LINE_MAX } from '../constants'
-import type { RtkFilterFn } from '../applyFilter'
+import { DEDUP_LINE_MAX } from '../constants.js'
+import type { RtkFilterFn } from '../applyFilter.js'
 
 export const dedupLog: RtkFilterFn = function dedupLog(text: string, maxLines = DEDUP_LINE_MAX): string {
   const lines = text.split('\n')

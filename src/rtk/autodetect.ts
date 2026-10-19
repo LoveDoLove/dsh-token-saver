@@ -3,19 +3,19 @@
  * Ported from dsh-our-free-model / open-sse/rtk autodetect under MIT license.
  */
 
-import { DETECT_WINDOW } from './constants'
-import type { RtkFilterFn } from './applyFilter'
-import { gitDiff } from './filters/gitDiff'
-import { gitStatus } from './filters/gitStatus'
-import { gitLog } from './filters/gitLog'
-import { grep } from './filters/grep'
-import { find } from './filters/find'
-import { tree } from './filters/tree'
-import { dedupLog } from './filters/dedupLog'
-import { smartTruncate } from './filters/smartTruncate'
-import { readNumbered, isNumberedOutput } from './filters/readNumbered'
-import { searchList } from './filters/searchList'
-import { buildOutput } from './filters/buildOutput'
+import { DETECT_WINDOW } from './constants.js'
+import type { RtkFilterFn } from './applyFilter.js'
+import { gitDiff } from './filters/gitDiff.js'
+import { gitStatus } from './filters/gitStatus.js'
+import { gitLog } from './filters/gitLog.js'
+import { grep } from './filters/grep.js'
+import { find } from './filters/find.js'
+import { tree } from './filters/tree.js'
+import { dedupLog } from './filters/dedupLog.js'
+import { smartTruncate } from './filters/smartTruncate.js'
+import { readNumbered, isNumberedOutput } from './filters/readNumbered.js'
+import { searchList } from './filters/searchList.js'
+import { buildOutput } from './filters/buildOutput.js'
 
 export function isMostlyPorcelain(sampleLines: readonly string[]): boolean {
   if (sampleLines.length < 3) return false

@@ -3,8 +3,8 @@
  * Ported from dsh-our-free-model / open-sse/rtk git::compact_log under MIT license.
  */
 
-import { GIT_LOG_MAX_LINES } from '../constants'
-import type { RtkFilterFn } from '../applyFilter'
+import { GIT_LOG_MAX_LINES } from '../constants.js'
+import type { RtkFilterFn } from '../applyFilter.js'
 
 export const gitLog: RtkFilterFn = function gitLog(log: string, maxLines = GIT_LOG_MAX_LINES): string {
   const lines = log.split('\n')

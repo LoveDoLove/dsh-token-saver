@@ -1,2 +1,2 @@
-export * from './truncate'
-export * from './fold-grep'
+export * from './truncate.js'
+export * from './fold-grep.js'
