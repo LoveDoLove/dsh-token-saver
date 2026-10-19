@@ -5,6 +5,8 @@ import { decidePreStep } from './strategies/context-pressure.js'
 import { stabilizeForCache } from './strategies/prompt-cache.js'
 import { LlmSummaryCompactionEngine, DEFAULT_COMPACTION_PROMPT } from './strategies/llm-summary.js'
 import { createRtkStats, compressMessages, type RtkStats } from './rtk/index.js'
+import { SettingsManager } from './settings.js'
+import { createApiRoutes } from './routes.js'
 import {
   activePrompts,
   injectSystem,
@@ -67,19 +69,71 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
   const sessionEventsProvider = makeSessionEventsAccessor(scope)
   const rtkStats: RtkStats = createRtkStats()
 
+  const settingsManager = new SettingsManager()
+  const runtimeState = settingsManager.init(resolved, rtkStats)
+
+  // Mount WebServer API routes if webServer service is available
+  if (typeof (scope as any).inject === 'function') {
+    ;(scope as any).inject(['webServer'], (scoped: any) => {
+      const server = scoped.webServer
+      if (server && typeof server.register === 'function') {
+        const apiHandler = createApiRoutes({
+          getSaver: () => settingsManager.getPublicTokenSaver(runtimeState),
+          setSaver: patch => settingsManager.updateTokenSaver(runtimeState, patch),
+          getLocal: () => settingsManager.getPublicLocalOptimize(runtimeState),
+          setLocal: patch => settingsManager.updateLocalOptimize(runtimeState, patch),
+        })
+        const unregister = server.register({
+          kind: 'prefix',
+          path: '/api/token-saver',
+          handler: apiHandler,
+        })
+        if (typeof unregister === 'function' && typeof scoped.effect === 'function') {
+          scoped.effect(() => () => unregister())
+        }
+        ownLogger.info('token-saver: web API mounted at /api/token-saver')
+      }
+    })
+  } else if ((scope as any).webServer) {
+    const server = (scope as any).webServer
+    if (server && typeof server.register === 'function') {
+      const apiHandler = createApiRoutes({
+        getSaver: () => settingsManager.getPublicTokenSaver(runtimeState),
+        setSaver: patch => settingsManager.updateTokenSaver(runtimeState, patch),
+        getLocal: () => settingsManager.getPublicLocalOptimize(runtimeState),
+        setLocal: patch => settingsManager.updateLocalOptimize(runtimeState, patch),
+      })
+      server.register({
+        kind: 'prefix',
+        path: '/api/token-saver',
+        handler: apiHandler,
+      })
+      ownLogger.info('token-saver: web API mounted at /api/token-saver')
+    }
+  }
+
   // 1) Tool result trimming + RTK filter hook
   const trimmedListener = (
     arg1: unknown,
     arg2: unknown,
     arg3?: unknown,
   ): Promise<PostToolDecision> => {
+    if (!runtimeState.enabled || (runtimeState.config.mode === 'off' && !runtimeState.config.rtkEnabled)) {
+      if (typeof arg3 === 'function') {
+        return (arg3 as () => Promise<PostToolDecision>)()
+      }
+      if (typeof arg2 === 'function') {
+        return (arg2 as () => Promise<PostToolDecision>)()
+      }
+      return Promise.resolve({ kind: 'accept' as const })
+    }
     // DSH waterfall event 'tools/post-execute' passes 3 arguments:
     // (exec: ToolExecution, result: Readonly<ToolExecutionResult>, next: () => Promise<PostToolDecision>)
     if (typeof arg3 === 'function') {
       const exec = arg1 as ToolExecutionLike
       const result = (arg2 ?? {}) as Readonly<ToolResultLike>
       const next = arg3 as () => Promise<PostToolDecision>
-      return handlePostTool(exec, result, next, resolved, rtkStats)
+      return handlePostTool(exec, result, next, runtimeState.config, runtimeState.rtkStats)
     }
     // Backward compatibility for 2-argument signature: ({ exec, result }, next)
     if (typeof arg2 === 'function') {
@@ -87,13 +141,13 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
       const exec = payload?.exec ?? (arg1 as ToolExecutionLike)
       const result = (payload?.result ?? {}) as Readonly<ToolResultLike>
       const next = arg2 as () => Promise<PostToolDecision>
-      return handlePostTool(exec, result, next, resolved, rtkStats)
+      return handlePostTool(exec, result, next, runtimeState.config, runtimeState.rtkStats)
     }
     // Defensive fallback when invoked without next
     const exec = arg1 as ToolExecutionLike
     const result = (arg2 ?? {}) as Readonly<ToolResultLike>
     const next = () => Promise.resolve({ kind: 'accept' as const })
-    return handlePostTool(exec, result, next, resolved, rtkStats)
+    return handlePostTool(exec, result, next, runtimeState.config, runtimeState.rtkStats)
   }
 
   // 2) Context pressure pre-step hook
@@ -101,9 +155,12 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
     const next = typeof rawNext === 'function'
       ? (rawNext as () => Promise<PreStepDecisionLike>)
       : () => Promise.resolve({ kind: 'enter' as const })
-    return handlePreStep(rawPayload, next, resolved, {
+    if (!runtimeState.enabled) {
+      return next()
+    }
+    return handlePreStep(rawPayload, next, runtimeState.config, {
       logger: ownLogger,
-      telemetry: resolved.telemetry,
+      telemetry: runtimeState.config.telemetry,
       getTokenMeter: tokenMeter,
       getCompactionEngine: compactionEngine,
       agentForSession,
@@ -121,13 +178,18 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
     try {
       const req = options as RequestLike | undefined
 
+      if (!runtimeState.enabled) {
+        return next()
+      }
+      const currentConfig = runtimeState.config
+
       // A) Local responses (quota, prefix, title, suggestion, filepath)
-      if (resolved.localResponsesEnabled && req) {
-        const answer = detectOptimization(req, resolved.localResponses)
+      if (currentConfig.localResponsesEnabled && req) {
+        const answer = detectOptimization(req, currentConfig.localResponses)
         if (answer !== null) {
           ownLogger.debug(`token-saver: local response triggered for kind=${answer.kind}`)
-          if (resolved.telemetry?.onLocalResponse) {
-            resolved.telemetry.onLocalResponse({
+          if (currentConfig.telemetry?.onLocalResponse) {
+            currentConfig.telemetry.onLocalResponse({
               kind: answer.kind,
               model: answer.model,
             })
@@ -137,10 +199,10 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
       }
 
       // B) Prompt shaping (Caveman & Ponytail)
-      if (resolved.cavemanLevel !== 'off' || resolved.ponytailLevel !== 'off') {
+      if (currentConfig.cavemanLevel !== 'off' || currentConfig.ponytailLevel !== 'off') {
         const active = activePrompts({
-          caveman: resolved.cavemanLevel,
-          ponytail: resolved.ponytailLevel,
+          caveman: currentConfig.cavemanLevel,
+          ponytail: currentConfig.ponytailLevel,
         })
         if (active.length > 0 && req) {
           const promptText = active.map((p) => p.text).join('\n\n')
@@ -153,7 +215,7 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
       }
 
       // C) In-flight request tool message compaction (RTK)
-      if (resolved.rtkEnabled && req) {
+      if (currentConfig.rtkEnabled && req) {
         try {
           compressMessages(req, { enabled: true })
         } catch {
