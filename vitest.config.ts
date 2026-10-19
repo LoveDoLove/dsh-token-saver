@@ -14,6 +14,7 @@ export default defineConfig({
     fs: { allow: [path.resolve(__dirname)] },
   },
   test: {
+    setupFiles: ["test/setup.ts"],
     include: ['test/**/*.test.ts'],
     environment: 'node',
     coverage: {

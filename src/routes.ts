@@ -46,12 +46,19 @@ export function createApiRoutes(options: {
   }
 }
 
+/** Settings patches are tiny JSON documents; reject anything larger early. */
+const MAX_BODY_BYTES = 64 * 1024
+
 async function readJson(req: IncomingMessage & { body?: unknown }): Promise<unknown> {
   if (req.body && typeof req.body === 'object') return req.body
   return new Promise((resolve, reject) => {
     let raw = ''
     req.on('data', chunk => {
       raw += String(chunk)
+      if (raw.length > MAX_BODY_BYTES) {
+        req.destroy()
+        reject(new Error('Request body too large'))
+      }
     })
     req.on('end', () => {
       if (!raw || !raw.trim()) return resolve({})
