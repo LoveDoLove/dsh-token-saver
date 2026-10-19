@@ -12,15 +12,14 @@
 ;(function () {
   'use strict'
 
-  if (typeof window === 'undefined' || !window.__ModuleLoader__) return
+  function createClientPlugin(require) {
+    const module = { exports: {} }
+    const exports = module.exports
+    const React = require('react')
+    const { useState, useEffect, useCallback, createElement: h } = React
 
-  window.__ModuleLoader__.load({
-    id: 'dsh-token-saver',
-    factory: function (require) {
-      const React = require('react')
-      const { useState, useEffect, useCallback, createElement: h } = React
-
-      const NS = 'settings.tokenSaver'
+    const NS = 'settings.tokenSaver'
+    const inject = ['slots', 'locale']
 
       const DICT = {
         zh: {
@@ -125,22 +124,34 @@
         },
       }
 
-      function localeTag(ctx) {
-        try {
-          const l = ctx?.i18n?.locale || navigator.language
-          return l && l.toLowerCase().startsWith('zh') ? 'zh' : 'en'
-        } catch {
-          return 'zh'
-        }
+    function localeTag(ctx) {
+      try {
+        const snapshot = typeof ctx?.locale?.getLocale === 'function' ? ctx.locale.getLocale() : ctx?.locale?.getSnapshot?.()
+        const value = snapshot?.active ?? ctx?.locale?.locale
+        if (typeof value === 'string' && value.length > 0) return value
+        const l = typeof document !== 'undefined' ? document.documentElement?.lang : navigator?.language
+        return l && l.toLowerCase().startsWith('zh') ? 'zh' : 'en'
+      } catch {
+        return 'zh'
       }
+    }
 
-      function createTranslator(ctx) {
-        const lang = localeTag(ctx)
-        const dict = DICT[lang] || DICT.zh
-        return function (key) {
-          return dict[key] || DICT.en[key] || key
+    function createTranslator(ctx) {
+      if (ctx?.locale && typeof ctx.locale.bind === 'function') {
+        const bound = ctx.locale.bind(NS)
+        return function (key, fallback) {
+          const res = bound(key)
+          if (res && res !== key && res !== `${NS}.${key}`) return res
+          const lang = localeTag(ctx).toLowerCase().startsWith('zh') ? 'zh' : 'en'
+          return DICT[lang]?.[key] || fallback || DICT.en[key] || key
         }
       }
+      const lang = localeTag(ctx).toLowerCase().startsWith('zh') ? 'zh' : 'en'
+      const dict = DICT[lang] || DICT.zh
+      return function (key, fallback) {
+        return dict[key] || fallback || DICT.en[key] || key
+      }
+    }
 
       const CSS = `
 .dts_root {
@@ -329,7 +340,9 @@
 
       const API = (() => {
         try {
-          return new URL('api/token-saver', document.baseURI).pathname
+          const base = typeof document !== 'undefined' && document.baseURI ? document.baseURI : 'http://localhost/'
+          const p = new URL('api/token-saver', base).pathname
+          return p.endsWith('/') ? p.slice(0, -1) : p
         } catch {
           return '/api/token-saver'
         }
@@ -340,7 +353,8 @@
         const ctrl = new AbortController()
         const timer = setTimeout(() => ctrl.abort(), timeout)
         try {
-          const response = await fetch(`${API}${path}`, {
+          const url = `${API}${path.startsWith('/') ? path : '/' + path}`
+          const response = await fetch(url, {
             ...fetchOptions,
             redirect: 'error',
             signal: ctrl.signal,
@@ -742,21 +756,55 @@
         )
       }
 
-      return function apply(ctx) {
-        const t = createTranslator(ctx)
-        ctx.slots.inject('settings.section', () =>
-          ctx.slots.register(
-            {
-              name: 'settings.section',
-              id: 'token-saver',
-              order: 40,
-              label: () => t('saver.title'),
-              locale: NS,
-            },
-            (props) => h(SaverPage, { ...props, locale: localeTag(ctx), ctx }),
-          ),
-        )
+    function apply(ctx) {
+      const t = createTranslator(ctx)
+      if (ctx.locale && typeof ctx.locale.register === 'function') {
+        ctx.effect(() => ctx.locale.register(NS, { zh: DICT.zh, en: DICT.en }), 'token-saver: dictionaries')
       }
-    },
-  })
+
+      ctx.effect(() => {
+        if (typeof document === 'undefined') return
+        const style = document.createElement('style')
+        style.setAttribute('data-plugin', 'dsh-token-saver')
+        style.textContent = CSS
+        document.head.appendChild(style)
+        return () => style.remove()
+      }, 'token-saver: styles')
+
+      ctx.slots.inject('settings.section', () =>
+        ctx.slots.register(
+          {
+            name: 'settings.section',
+            id: 'token-saver',
+            order: 40,
+            label: () => t('saver.tab'),
+            locale: NS,
+          },
+          (props) => h(SaverPage, { ...props, locale: localeTag(ctx), ctx }),
+        ),
+      )
+    }
+
+    exports.apply = apply
+    exports.inject = inject
+    exports.name = 'dsh-token-saver'
+    return module.exports
+  }
+
+  const loader =
+    (typeof window !== 'undefined' ? window.__ModuleLoader__ : undefined) ||
+    (typeof globalThis !== 'undefined' ? globalThis.__ModuleLoader__ : undefined)
+
+  if (loader && typeof loader.load === 'function') {
+    loader.load({
+      id: 'dsh-token-saver',
+      factory: createClientPlugin,
+    })
+  } else if (typeof window !== 'undefined') {
+    window.__ModuleLoaderPending = window.__ModuleLoaderPending || []
+    window.__ModuleLoaderPending.push({
+      id: 'dsh-token-saver',
+      factory: createClientPlugin,
+    })
+  }
 })()

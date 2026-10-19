@@ -15,7 +15,9 @@
       "patch": "./cordis.patch.yml"
     },
     "client": {
-      "platform": "web"
+      "platform": "web",
+      "immediately": true,
+      "inject": []
     }
   },
   "license": "MIT",
@@ -31,6 +33,7 @@
   ],
   "files": [
     "lib",
+    "client.js",
     "cordis.patch.yml",
     "README.md",
     "LICENSE"
