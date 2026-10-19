@@ -85,10 +85,13 @@ export interface ToolContentBlock {
     readonly data?: unknown;
 }
 export interface ToolExecutionLike {
-    readonly id: string;
-    readonly tool: {
-        readonly name: string;
+    readonly id?: string;
+    readonly name?: string;
+    readonly tool?: {
+        readonly name?: string;
     };
+    readonly arguments?: unknown;
+    readonly [key: string]: unknown;
 }
 export interface ToolResultLike {
     readonly content?: readonly ToolContentBlock[];

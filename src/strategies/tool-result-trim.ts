@@ -18,6 +18,7 @@ import type {
   ResolvedConfig,
   TelemetryHook,
   ToolContentBlock,
+  ToolExecutionLike,
   ToolResultLike,
 } from '../internal.js'
 
@@ -75,14 +76,14 @@ export function shouldHandle(toolName: string | undefined, cfg: ResolvedConfig):
 }
 
 export interface PostToolPayloadLike {
-  readonly exec?: { readonly id?: string; readonly tool?: { readonly name?: string } }
+  readonly exec?: ToolExecutionLike
   readonly result?: ToolResultLike
 }
 
 export function decidePostTool(payload: PostToolPayloadLike, options: ToolResultTrimOptions): ToolResultTrimResult {
   const { config, telemetry, rtkStats } = options
   try {
-    const toolName = payload.exec?.tool?.name
+    const toolName = payload.exec?.name ?? payload.exec?.tool?.name
     if (!shouldHandle(toolName, config)) {
       return {
         decision: { kind: 'accept' },

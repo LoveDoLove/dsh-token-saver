@@ -69,14 +69,39 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
   const rtkStats: RtkStats = createRtkStats()
 
   // 1) Tool result trimming + RTK filter hook
-  const trimmedListener = (rawPayload: unknown, rawNext: unknown) => {
-    const next = rawNext as () => Promise<PostToolDecision>
-    return handlePostTool(rawPayload, next, resolved, rtkStats)
+  const trimmedListener = (
+    arg1: unknown,
+    arg2: unknown,
+    arg3?: unknown,
+  ): Promise<PostToolDecision> => {
+    // DSH waterfall event 'tools/post-execute' passes 3 arguments:
+    // (exec: ToolExecution, result: Readonly<ToolExecutionResult>, next: () => Promise<PostToolDecision>)
+    if (typeof arg3 === 'function') {
+      const exec = arg1 as ToolExecutionLike
+      const result = (arg2 ?? {}) as Readonly<ToolResultLike>
+      const next = arg3 as () => Promise<PostToolDecision>
+      return handlePostTool(exec, result, next, resolved, rtkStats)
+    }
+    // Backward compatibility for 2-argument signature: ({ exec, result }, next)
+    if (typeof arg2 === 'function') {
+      const payload = arg1 as { exec?: ToolExecutionLike; result?: ToolResultLike } | undefined
+      const exec = payload?.exec ?? (arg1 as ToolExecutionLike)
+      const result = (payload?.result ?? {}) as Readonly<ToolResultLike>
+      const next = arg2 as () => Promise<PostToolDecision>
+      return handlePostTool(exec, result, next, resolved, rtkStats)
+    }
+    // Defensive fallback when invoked without next
+    const exec = arg1 as ToolExecutionLike
+    const result = (arg2 ?? {}) as Readonly<ToolResultLike>
+    const next = () => Promise.resolve({ kind: 'accept' as const })
+    return handlePostTool(exec, result, next, resolved, rtkStats)
   }
 
   // 2) Context pressure pre-step hook
   const preStepListener = (rawPayload: unknown, rawNext: unknown) => {
-    const next = rawNext as () => Promise<PreStepDecisionLike>
+    const next = typeof rawNext === 'function'
+      ? (rawNext as () => Promise<PreStepDecisionLike>)
+      : () => Promise.resolve({ kind: 'enter' as const })
     return handlePreStep(rawPayload, next, resolved, {
       logger: ownLogger,
       telemetry: resolved.telemetry,
@@ -185,20 +210,19 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
 }
 
 async function handlePostTool(
-  rawPayload: unknown,
+  exec: ToolExecutionLike | undefined,
+  result: Readonly<ToolResultLike> | undefined,
   next: () => Promise<PostToolDecision>,
   resolved: ResolvedConfig,
   rtkStats?: RtkStats,
 ): Promise<PostToolDecision> {
-  const exec = (rawPayload as { exec?: ToolExecutionLike } | undefined)?.exec
-  const result = (rawPayload as { result?: ToolResultLike } | undefined)?.result
   const payload = { exec, result }
   const folded = decidePostTool(payload, {
     config: resolved,
     telemetry: resolved.telemetry,
     rtkStats,
   })
-  const upstream = await next()
+  const upstream = typeof next === 'function' ? await next() : { kind: 'accept' as const }
   if (!folded.folded) return upstream
   if (upstream.kind === 'block') return upstream
   if (upstream.kind === 'accept' && upstream.value !== undefined) return upstream

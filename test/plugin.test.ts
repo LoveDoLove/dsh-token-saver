@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context, resolveConfig as cordisResolveConfig, ValidationError } from '@deepseek-ai/cordis'
 import * as plugin from '../src/index'
 import { apply, name, Config, inject } from '../src/index'
-import type { GenerateOptionsLike, StreamChunkLike } from '../src/types'
+import type { GenerateOptionsLike, StreamChunkLike, ToolExecutionLike, ToolResultLike, PostToolDecision } from '../src/types'
 
 function createScope() {
   const listeners = new Map<string, Array<(...args: readonly unknown[]) => unknown>>()
@@ -236,5 +236,112 @@ describe('plugin global hooks execution', () => {
       // consume
     }
     expect(nextMock).toHaveBeenCalled()
+  })
+})
+
+describe('tools/post-execute waterfall hook', () => {
+  it('handles standard DSH 3-argument signature (exec, result, next)', async () => {
+    const scope = createScope()
+    await apply(scope, { mode: 'conservative' })
+
+    const postToolListener = scope.listeners.get('tools/post-execute')?.[0] as (
+      exec: ToolExecutionLike,
+      result: ToolResultLike,
+      next: () => Promise<PostToolDecision>,
+    ) => Promise<PostToolDecision>
+
+    expect(postToolListener).toBeDefined()
+
+    const exec: ToolExecutionLike = { id: 'call_1', name: 'read' }
+    const result: ToolResultLike = { content: [{ type: 'text', text: 'normal result' }] }
+    const nextMock = vi.fn(async () => ({ kind: 'accept' as const }))
+
+    const decision = await postToolListener(exec, result, nextMock)
+
+    expect(nextMock).toHaveBeenCalled()
+    expect(decision.kind).toBe('accept')
+  })
+
+  it('regression: calls next() and does not throw "next is not a function" when passed 3 arguments', async () => {
+    const scope = createScope()
+    await apply(scope, { mode: 'conservative' })
+
+    const postToolListener = scope.listeners.get('tools/post-execute')?.[0] as (
+      exec: ToolExecutionLike,
+      result: ToolResultLike,
+      next: () => Promise<PostToolDecision>,
+    ) => Promise<PostToolDecision>
+
+    const exec: ToolExecutionLike = { id: 'call_2', name: 'read' }
+    const big = Array.from({ length: 5000 }, (_, i) => `line-${i}`).join('\n')
+    const result: ToolResultLike = { content: [{ type: 'text', text: big }] }
+    const nextMock = vi.fn(async () => ({ kind: 'accept' as const }))
+
+    // This must NOT throw TypeError: next is not a function!
+    const decision = await postToolListener(exec, result, nextMock)
+
+    expect(nextMock).toHaveBeenCalled()
+    expect(decision.kind).toBe('accept')
+    expect(Array.isArray(decision.content)).toBe(true)
+  })
+
+  it('handles backward-compatible 2-argument signature ({ exec, result }, next)', async () => {
+    const scope = createScope()
+    await apply(scope, { mode: 'conservative' })
+
+    const postToolListener = scope.listeners.get('tools/post-execute')?.[0] as (
+      payload: { exec?: ToolExecutionLike; result?: ToolResultLike },
+      next: () => Promise<PostToolDecision>,
+    ) => Promise<PostToolDecision>
+
+    const payload = {
+      exec: { id: 'call_3', name: 'read' },
+      result: { content: [{ type: 'text', text: 'small text' }] },
+    }
+    const nextMock = vi.fn(async () => ({ kind: 'accept' as const }))
+
+    const decision = await postToolListener(payload, nextMock)
+
+    expect(nextMock).toHaveBeenCalled()
+    expect(decision.kind).toBe('accept')
+  })
+
+  it('defensively falls back when next argument is missing', async () => {
+    const scope = createScope()
+    await apply(scope, { mode: 'conservative' })
+
+    const postToolListener = scope.listeners.get('tools/post-execute')?.[0] as (
+      exec: ToolExecutionLike,
+      result: ToolResultLike,
+    ) => Promise<PostToolDecision>
+
+    const exec: ToolExecutionLike = { id: 'call_4', name: 'read' }
+    const result: ToolResultLike = { content: [{ type: 'text', text: 'small text' }] }
+
+    const decision = await postToolListener(exec, result)
+    expect(decision.kind).toBe('accept')
+  })
+
+  it('preserves isError results untouched', async () => {
+    const scope = createScope()
+    await apply(scope, { mode: 'conservative' })
+
+    const postToolListener = scope.listeners.get('tools/post-execute')?.[0] as (
+      exec: ToolExecutionLike,
+      result: ToolResultLike,
+      next: () => Promise<PostToolDecision>,
+    ) => Promise<PostToolDecision>
+
+    const exec: ToolExecutionLike = { id: 'call_5', name: 'read' }
+    const result: ToolResultLike = {
+      isError: true,
+      content: [{ type: 'text', text: 'A'.repeat(50000) }],
+    }
+    const nextMock = vi.fn(async () => ({ kind: 'accept' as const }))
+
+    const decision = await postToolListener(exec, result, nextMock)
+    expect(nextMock).toHaveBeenCalled()
+    // Not folded because isError: true
+    expect(decision.content).toBeUndefined()
   })
 })

@@ -10,7 +10,7 @@
  * with the original content preserved verbatim.
  */
 import { type RtkStats } from '../rtk/index.js';
-import type { PostToolDecision, ResolvedConfig, TelemetryHook, ToolContentBlock, ToolResultLike } from '../internal.js';
+import type { PostToolDecision, ResolvedConfig, TelemetryHook, ToolContentBlock, ToolExecutionLike, ToolResultLike } from '../internal.js';
 export interface ToolResultTrimOptions {
     readonly config: ResolvedConfig;
     readonly telemetry?: TelemetryHook;
@@ -24,12 +24,7 @@ export interface ToolResultTrimResult {
 }
 export declare function shouldHandle(toolName: string | undefined, cfg: ResolvedConfig): boolean;
 export interface PostToolPayloadLike {
-    readonly exec?: {
-        readonly id?: string;
-        readonly tool?: {
-            readonly name?: string;
-        };
-    };
+    readonly exec?: ToolExecutionLike;
     readonly result?: ToolResultLike;
 }
 export declare function decidePostTool(payload: PostToolPayloadLike, options: ToolResultTrimOptions): ToolResultTrimResult;
