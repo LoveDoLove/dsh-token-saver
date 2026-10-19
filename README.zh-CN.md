@@ -1,0 +1,93 @@
+# DSH Token Saver
+
+**面向 DeepSeek Harness（DSH）的可配置 Token 优化插件。**
+
+[English](README.md) · [版本发布](https://github.com/LoveDoLove/dsh-token-saver/releases) · [问题反馈](https://github.com/LoveDoLove/dsh-token-saver/issues)
+
+DSH Token Saver 用于减少冗长工具输出占用的上下文，并提供可选的提示词压缩、上下文压力处理、本地响应和 LLM 摘要压缩。各项优化可以独立配置；额外优化默认关闭，基础模式默认保持保守。
+
+## 功能
+
+| 功能 | 说明 | 默认状态 |
+|---|---|---|
+| 工具输出裁剪 | 对过长的工具结果保留开头和结尾 | 保守模式启用 |
+| Grep 结果折叠 | 折叠大型 grep 输出并保留有用上下文 | 保守模式启用 |
+| 上下文压力处理 | 监测上下文压力，并可在更高模式下触发压缩 | 保守模式 |
+| RTK 集成 | 通过 RTK 压缩受支持命令的输出 | 关闭 |
+| Caveman 提示词处理 | 使用可配置的精简提示词风格 | 关闭 |
+| Ponytail 提示词处理 | 采用尽量小改动、完整解决任务的处理风格 | 关闭 |
+| 本地响应 | 对支持的探测请求直接返回结果，无需调用 LLM | 关闭 |
+| LLM 摘要压缩 | 可选使用 LLM 摘要进行上下文压缩 | 关闭 |
+| Prompt Cache 稳定性 | 可选稳定系统提示词各部分的顺序 | 关闭 |
+| Web 设置面板 | 在 **Settings → Token Saver** 中配置插件 | DSH Web 可用 |
+
+## 安装
+
+通过 DSH 从 GitHub 仓库安装：
+
+```bash
+dsh plugin --profile web add github:LoveDoLove/dsh-token-saver
+```
+
+如果 DSH/pnpm 要求批准构建脚本，请按终端提示完成授权后重新安装。之后根据当前 DSH 安装方式重新加载或重启目标 profile。
+
+> 本项目以 GitHub 仓库和 GitHub Releases 为准；有固定版本的正式发行版时，建议安装指定版本。
+
+## 配置
+
+在 DSH Web 中打开 **Settings → Token Saver**，即可使用设置面板。也可以通过 DSH bundle 配置文件进行配置。
+
+示例：
+
+```yaml
+dsh-token-saver:
+  mode: conservative # off | conservative | balanced | aggressive
+  rtkEnabled: false
+  cavemanLevel: off # off | lite | full | ultra | wenyan-lite | wenyan | wenyan-ultra
+  ponytailLevel: off # off | lite | full | ultra
+  localResponsesEnabled: false
+  localResponses: [quota, prefix, title, suggestion, filepath]
+  llmSummaryEnabled: false
+```
+
+### 模式
+
+- **off**：关闭 Token 优化处理。
+- **conservative**：裁剪或折叠过长的工具输出，同时保留 DSH 原有的常规压缩流程。
+- **balanced**：启用更多上下文压力处理。
+- **aggressive**：启用更积极的压缩行为；使用前请检查相关配置。
+
+实际行为取决于各项配置和当前安装的 DSH 版本。请以当前版本的设置面板和配置默认值为准。
+
+## 安全行为
+
+- **失败时保留原内容：** 优化过程失败或结果不可用时，保留原始内容。
+- **保留错误输出：** 工具输出过滤器不会压缩被标记为错误的结果。
+- **额外功能可单独启用：** RTK、提示词处理、本地响应和 LLM 摘要压缩均可独立配置。
+- **不保证任务质量完全不变：** Token 优化可能改变模型能看到的信息。尤其启用激进压缩前，应先审查设置。
+
+## 兼容性
+
+项目设计上可与以下插件协同使用：
+
+- **Billion Context**：相关输出过滤器会保留带有 ACP 标记的内容。
+- **OmniRoute**：设计上保留请求中的路由字段。
+- **Our Free Model**：识别 `<!-- ofm-token-saver -->` 标记，避免重复应用提示词处理。
+
+实际兼容性取决于周边插件的版本和配置。反馈问题时请附上相关版本信息及可复现步骤。
+
+## 开发
+
+要求：Node.js `>=22.19.0` 和 pnpm。
+
+```bash
+pnpm install
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+```
+
+## 许可证
+
+MIT，详见 [LICENSE](LICENSE)。从第三方项目衍生的部分保留所需的署名和许可声明，具体请查看源文件及许可证说明。
