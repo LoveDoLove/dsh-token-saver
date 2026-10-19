@@ -1,0 +1,95 @@
+{
+  "name": "dsh-token-saver",
+  "publishConfig": {
+    "access": "public"
+  },
+  "version": "0.1.0",
+  "description": "DeepSeek Harness plugin: aggressive token optimization without affecting task quality. Trims tool results with RTK, prompt shaping via Caveman & Ponytail, instant local responses, manages context window pressure, optional LLM-summary compaction, stable prompt-cache layout.",
+  "type": "module",
+  "private": false,
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "license": "MIT",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek",
+    "deepseek-harness",
+    "token-saver",
+    "compaction",
+    "rtk",
+    "caveman",
+    "ponytail"
+  ],
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./lib/index.js",
+  "module": "./lib/index.js",
+  "types": "./lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./config": {
+      "types": "./lib/types/config.d.ts",
+      "import": "./lib/config.js"
+    },
+    "./truncate": {
+      "types": "./lib/types/lib/truncate.d.ts",
+      "import": "./lib/lib/truncate.js"
+    },
+    "./fold-grep": {
+      "types": "./lib/types/lib/fold-grep.d.ts",
+      "import": "./lib/lib/fold-grep.js"
+    },
+    "./rtk": {
+      "types": "./lib/types/rtk/index.d.ts",
+      "import": "./lib/rtk/index.js"
+    },
+    "./prompt-shaping": {
+      "types": "./lib/types/prompt-shaping/index.d.ts",
+      "import": "./lib/prompt-shaping/index.js"
+    },
+    "./local-responses": {
+      "types": "./lib/types/local-responses/index.d.ts",
+      "import": "./lib/local-responses/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "oxlint src test",
+    "lint:fix": "oxlint --fix src test"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0 <5.0.0",
+    "@deepseek-ai/dsh-compaction": ">=0.0.1-rc.1 <0.3.0",
+    "@deepseek-ai/schemastery": ">=3.18.0 <4.0.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-compaction": "0.0.1-rc.5",
+    "@deepseek-ai/schemastery": "3.18.2",
+    "@types/node": "^22.13.0",
+    "oxlint": "^0.15.11",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^2.1.8"
+  }
+}
