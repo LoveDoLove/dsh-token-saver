@@ -14,6 +14,8 @@ import {
   tree,
   dedupLog,
   buildOutput,
+  mergeRtkStats,
+  compressMessages,
 } from '../src/rtk'
 import { decidePostTool } from '../src/strategies/tool-result-trim'
 import { resolveConfig } from '../src/config'
@@ -241,5 +243,70 @@ describe('RTK Engine Autodetection & Invariants', () => {
     )
     expect(res.folded).toBe(false)
     expect(res.originalBytes).toBe(0)
+  })
+})
+
+describe('llm/stream stream stats merge', () => {
+  const makeGitLogBody = () => {
+    const lines = ['commit 0123456789abcdef0123456789abcdef01234567']
+    for (let i = 0; i < 80; i++) {
+      lines.push('commit 000000000000000000000000000000000000000' + String(i % 10))
+      lines.push('Author: Developer <dev@example.com>')
+      lines.push('Date:   Sun Oct 18 20:00:00 2026 +0800')
+      lines.push('    fix: sample commit ' + i)
+    }
+    return {
+      messages: [
+        { role: 'user', content: 'summarize the log' },
+        { role: 'tool', content: lines.join('\n') },
+      ],
+    }
+  }
+
+  it('compressMessages reports only actual hits in its returned stats', () => {
+    const body = makeGitLogBody()
+    const stats = compressMessages(body, { enabled: true })
+    expect(stats).not.toBeNull()
+    expect(stats!.hits.length).toBe(1)
+    expect(stats!.saved).toBeGreaterThan(0)
+    expect(stats!.bytesAfter).toBeLessThan(stats!.bytesBefore)
+    // message payload itself was compacted (11957 -> 5997 with 80 one-line commits)
+    const msg = (body as { messages: { role: string; content: string }[] }).messages[1]!
+    expect(msg?.content).toContain('0123456')
+    expect(msg?.content.length).toBeLessThan(6100)
+  })
+
+  it('merging stream stats into shared stats advances savings exactly once', () => {
+    const shared = createRtkStats()
+    const streamStats = compressMessages(makeGitLogBody(), { enabled: true })
+    mergeRtkStats(shared, streamStats)
+    expect(shared.saved).toBe(streamStats!.saved)
+    expect(shared.bytesBefore).toBe(streamStats!.bytesBefore)
+    expect(shared.bytesAfter).toBe(streamStats!.bytesAfter)
+    expect(shared.hits.length).toBe(streamStats!.hits.length)
+
+    // Re-merging the same result must not double-count.
+    mergeRtkStats(shared, streamStats)
+    expect(shared.saved).toBe(streamStats!.saved * 2)
+    expect(shared.hits.length).toBe(streamStats!.hits.length * 2)
+  })
+
+  it('merging no-op or null stream stats changes nothing', () => {
+    const shared = createRtkStats()
+    const baseline = { saved: shared.saved, hits: shared.hits.length }
+
+    // Uncompressed request: no RTK-detectable content.
+    const plainStats = compressMessages(
+      { messages: [{ role: 'user', content: 'plain text question with no tool output' }] },
+      { enabled: true },
+    )
+    mergeRtkStats(shared, plainStats)
+    expect(shared.saved).toBe(baseline.saved)
+    expect(shared.hits.length).toBe(baseline.hits)
+
+    mergeRtkStats(shared, null)
+    mergeRtkStats(shared, undefined)
+    expect(shared.saved).toBe(baseline.saved)
+    expect(shared.hits.length).toBe(baseline.hits)
   })
 })

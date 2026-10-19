@@ -4,7 +4,7 @@ import { decidePostTool } from './strategies/tool-result-trim.js'
 import { decidePreStep } from './strategies/context-pressure.js'
 import { stabilizeForCache } from './strategies/prompt-cache.js'
 import { LlmSummaryCompactionEngine, DEFAULT_COMPACTION_PROMPT } from './strategies/llm-summary.js'
-import { createRtkStats, compressMessages, type RtkStats } from './rtk/index.js'
+import { createRtkStats, compressMessages, mergeRtkStats, type RtkStats } from './rtk/index.js'
 import { SettingsManager } from './settings.js'
 import { createApiRoutes } from './routes.js'
 import {
@@ -217,7 +217,10 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
       // C) In-flight request tool message compaction (RTK)
       if (currentConfig.rtkEnabled && req) {
         try {
-          compressMessages(req, { enabled: true })
+          // Only actual compression hits advance the shared stats; mergeRtkStats
+          // ignores no-op results, so uncompressed requests add nothing.
+          const streamStats = compressMessages(req, { enabled: true })
+          mergeRtkStats(rtkStats, streamStats)
         } catch {
           // Frozen/readonly options: skip, fail open.
         }

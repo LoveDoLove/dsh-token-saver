@@ -21,6 +21,12 @@ export interface RtkStats {
     hits: RtkHit[];
 }
 export declare function createRtkStats(): RtkStats;
+/**
+ * Merge `source` stats into `target` in place. Only actual compression hits
+ * move the counters (uncompressed calls yield zero-bytes stats), so merging a
+ * no-op request's stats changes nothing.
+ */
+export declare function mergeRtkStats(target: RtkStats, ...sources: (RtkStats | null | undefined)[]): RtkStats;
 export interface CompressTextResult {
     readonly text: string;
     readonly filterUsed: string | null;

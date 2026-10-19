@@ -126,22 +126,14 @@ export function decidePostTool(payload: PostToolPayloadLike, options: ToolResult
     const originalBytes = Buffer.byteLength(aggregated.text, 'utf8')
     const threshold = config.headBytes + config.tailBytes + 256
 
-    if (originalBytes <= threshold) {
-      return {
-        decision: { kind: 'accept', content },
-        folded: false,
-        originalBytes,
-        trimmedBytes: originalBytes,
-      }
-    }
-
     let newAggregate = aggregated.text
     let strategy: 'head-tail' | 'head-only' | 'tail-only' | 'rtk' = 'head-tail'
     let rtkFilter: string | undefined
 
     // 1) RTK pass: structured-output compaction when enabled.
-    //    Runs only on tool output; skips when the aggregate is not large enough
-    //    or when the filter cannot guarantee a strictly-smaller, non-empty result.
+    //    Runs on tool output of any size (compressText enforces its own
+    //    MIN_COMPRESS_SIZE floor) and only accepts a strictly-smaller,
+    //    non-empty result. Sub-threshold outputs still get the RTK pass.
     let rtkApplied = false
     if (config.rtkEnabled) {
       const rtkResult = compressText(
@@ -154,6 +146,16 @@ export function decidePostTool(payload: PostToolPayloadLike, options: ToolResult
         strategy = 'rtk'
         rtkFilter = rtkResult.filterUsed ?? undefined
         rtkApplied = true
+      }
+    }
+
+    if (!rtkApplied && originalBytes <= threshold) {
+      // Sub-threshold and RTK did not compress: preserve original content.
+      return {
+        decision: { kind: 'accept', content },
+        folded: false,
+        originalBytes,
+        trimmedBytes: originalBytes,
       }
     }
 

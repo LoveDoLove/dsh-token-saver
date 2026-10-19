@@ -37,6 +37,22 @@ export function createRtkStats(): RtkStats {
   }
 }
 
+/**
+ * Merge `source` stats into `target` in place. Only actual compression hits
+ * move the counters (uncompressed calls yield zero-bytes stats), so merging a
+ * no-op request's stats changes nothing.
+ */
+export function mergeRtkStats(target: RtkStats, ...sources: (RtkStats | null | undefined)[]): RtkStats {
+  for (const source of sources) {
+    if (!source || source.hits.length === 0) continue
+    target.bytesBefore += source.bytesBefore
+    target.bytesAfter += source.bytesAfter
+    target.saved += source.saved
+    target.hits.push(...source.hits)
+  }
+  return target
+}
+
 export interface CompressTextResult {
   readonly text: string
   readonly filterUsed: string | null
