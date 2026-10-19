@@ -34,13 +34,7 @@ export const name = 'dsh-token-saver'
 
 export const Config = TokenSaverSchema
 
-export const inject = [
-  'agentLoop',
-  'compaction',
-  'tokenMeter',
-  'systemPrompt',
-  'tools',
-] as const
+export const inject = ['tools'] as const
 
 export interface Logger {
   debug: (msg: string, ...rest: readonly unknown[]) => void

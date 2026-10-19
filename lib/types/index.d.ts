@@ -8,7 +8,7 @@ export interface TokenSaverPluginOptions {
 }
 export declare const name = "dsh-token-saver";
 export declare const Config: import("./config.js").ConfigDescriptor;
-export declare const inject: readonly ["agentLoop", "compaction", "tokenMeter", "systemPrompt", "tools"];
+export declare const inject: readonly ["tools"];
 export interface Logger {
     debug: (msg: string, ...rest: readonly unknown[]) => void;
     info: (msg: string, ...rest: readonly unknown[]) => void;
@@ -25,7 +25,7 @@ export declare function apply(rawScope: unknown, rawConfig: unknown): Promise<vo
 export declare const plugin: {
     name: string;
     Config: import("./config.js").ConfigDescriptor;
-    inject: readonly ["agentLoop", "compaction", "tokenMeter", "systemPrompt", "tools"];
+    inject: readonly ["tools"];
     apply: typeof apply;
 };
 export default plugin;

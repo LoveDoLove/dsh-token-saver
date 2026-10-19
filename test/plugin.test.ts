@@ -31,7 +31,7 @@ describe('plugin entry & Cordis registration', () => {
     expect(typeof Config).toBe('object')
     expect(Array.isArray(inject)).toBe(true)
     expect(inject).toContain('tools')
-    expect(inject).toContain('compaction')
+    expect(inject).not.toContain('compaction')
   })
 
   it('registers tools/post-execute, agent/pre-step, and llm/stream listeners', async () => {
