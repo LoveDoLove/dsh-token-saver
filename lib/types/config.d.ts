@@ -27,7 +27,21 @@ export interface ResolvedConfig {
 }
 export declare const DEFAULTS: ResolvedConfig;
 export declare function resolveConfig(input: TokenSaverConfig | undefined): ResolvedConfig;
+export interface StandardSchemaV1Props<Input = unknown, Output = Input> {
+    readonly version: 1;
+    readonly vendor: string;
+    readonly validate: (value: unknown) => {
+        readonly value: Output;
+        readonly issues?: undefined;
+    } | {
+        readonly issues: ReadonlyArray<{
+            readonly message: string;
+            readonly path?: ReadonlyArray<PropertyKey>;
+        }>;
+    };
+}
 export interface ConfigDescriptor {
+    readonly '~standard': StandardSchemaV1Props<unknown, TokenSaverConfig>;
     readonly name: string;
     readonly fields: Readonly<Record<keyof ResolvedConfig | 'mode', 'string' | 'number' | 'boolean' | 'enum'>>;
     readonly validate: (input: unknown) => TokenSaverConfig;

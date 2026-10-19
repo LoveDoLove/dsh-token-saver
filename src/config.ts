@@ -126,7 +126,18 @@ export function resolveConfig(input: TokenSaverConfig | undefined): ResolvedConf
   }
 }
 
+export interface StandardSchemaV1Props<Input = unknown, Output = Input> {
+  readonly version: 1
+  readonly vendor: string
+  readonly validate: (
+    value: unknown,
+  ) =>
+    | { readonly value: Output; readonly issues?: undefined }
+    | { readonly issues: ReadonlyArray<{ readonly message: string; readonly path?: ReadonlyArray<PropertyKey> }> }
+}
+
 export interface ConfigDescriptor {
+  readonly '~standard': StandardSchemaV1Props<unknown, TokenSaverConfig>
   readonly name: string
   readonly fields: Readonly<Record<keyof ResolvedConfig | 'mode', 'string' | 'number' | 'boolean' | 'enum'>>
   readonly validate: (input: unknown) => TokenSaverConfig
@@ -134,6 +145,23 @@ export interface ConfigDescriptor {
 }
 
 export const TokenSaverSchema: ConfigDescriptor = {
+  '~standard': {
+    version: 1,
+    vendor: 'dsh-token-saver',
+    validate(input: unknown) {
+      if (input !== undefined && (typeof input !== 'object' || input === null || Array.isArray(input))) {
+        return {
+          issues: [
+            {
+              message: 'Expected configuration to be an object',
+            },
+          ],
+        }
+      }
+      const validated = (!input || typeof input !== 'object') ? {} : (input as TokenSaverConfig)
+      return { value: validated }
+    },
+  },
   name: 'TokenSaverConfig',
   fields: {
     mode: 'enum',

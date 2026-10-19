@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { Context, resolveConfig as cordisResolveConfig, ValidationError } from '@deepseek-ai/cordis'
+import * as plugin from '../src/index'
 import { apply, name, Config, inject } from '../src/index'
 import type { GenerateOptionsLike, StreamChunkLike } from '../src/types'
 
@@ -32,6 +34,30 @@ describe('plugin entry & Cordis registration', () => {
     expect(Array.isArray(inject)).toBe(true)
     expect(inject).toContain('tools')
     expect(inject).not.toContain('compaction')
+  })
+
+  it('conforms to Standard Schema v1 on Config', () => {
+    expect(Config['~standard']).toBeDefined()
+    expect(Config['~standard'].version).toBe(1)
+    expect(Config['~standard'].vendor).toBe('dsh-token-saver')
+    expect(typeof Config['~standard'].validate).toBe('function')
+  })
+
+  it('resolves config via Cordis resolveConfig without validate errors', () => {
+    const resolved = cordisResolveConfig(plugin as never, { mode: 'conservative' })
+    expect(resolved).toEqual({ mode: 'conservative' })
+
+    const empty = cordisResolveConfig(plugin as never, undefined)
+    expect(empty).toEqual({})
+
+    expect(() => cordisResolveConfig(plugin as never, 'not-an-object')).toThrow(ValidationError)
+  })
+
+  it('initializes and activates cleanly inside a Cordis Context', async () => {
+    const ctx = new Context()
+    ctx.provide('tools', true)
+    const fiber = await ctx.plugin(plugin, { mode: 'conservative' })
+    expect(fiber).toBeDefined()
   })
 
   it('registers tools/post-execute, agent/pre-step, and llm/stream listeners', async () => {
