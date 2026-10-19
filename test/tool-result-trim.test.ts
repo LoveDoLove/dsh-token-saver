@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decidePostTool } from '../src/strategies/tool-result-trim'
+import { decidePostTool, __testing } from '../src/strategies/tool-result-trim'
 import { resolveConfig } from '../src/config'
 
 const baseCfg = () => resolveConfig({ mode: 'conservative' })
@@ -119,5 +119,164 @@ describe('decidePostTool', () => {
       { config: cfg },
     )
     expect(out.folded).toBe(false)
+  })
+})
+
+/**
+ * Faithful reimplementation of the lossless-JSON rules enforced by DSH
+ * (dsh-util-values walkJsonValue) so tests can assert that a folded tool
+ * result survives the harness's strict snapshot before it is shipped.
+ */
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  if (v === null || typeof v !== 'object') return false
+  const proto = Object.getPrototypeOf(v)
+  return proto === Object.prototype || proto === null
+}
+
+function isPlainArray(v: unknown[]): boolean {
+  if (Object.getPrototypeOf(v) !== Array.prototype) return false
+  // DSH requires arrays to carry exactly `length + 1` own keys (the index
+  // slots plus the non-enumerable `length`); holes or extra props fail.
+  return Reflect.ownKeys(v).length === v.length + 1
+}
+
+function isLossless(value: unknown, seen = new Set<unknown>()): boolean {
+  if (value === null) return true
+  switch (typeof value) {
+    case 'boolean':
+      return true
+    case 'string':
+      return true
+    case 'number':
+      return Number.isFinite(value) && !Object.is(value, -0)
+    case 'object': {
+      if (seen.has(value)) return false
+      seen.add(value)
+      if (Array.isArray(value)) {
+        if (!isPlainArray(value)) return false
+        for (const item of value) if (!isLossless(item, seen)) return false
+        return true
+      }
+      if (!isPlainObject(value)) return false
+      for (const key of Object.keys(value)) {
+        if (!isLossless((value as Record<string, unknown>)[key], seen)) return false
+      }
+      return true
+    }
+    default:
+      return false
+  }
+}
+
+const losslessCfg = () => resolveConfig({ mode: 'conservative', rtkEnabled: true })
+
+const bigText = (n: number) => Array.from({ length: n }, (_, i) => `line-${i.toString().padStart(6, '0')}-match-here`).join('\n')
+
+describe('decidePostTool strict JSON serialization', () => {
+  it('keeps single-block folded output losslessly serializable (bash)', () => {
+    const out = decidePostTool(
+      { exec: { name: 'bash' }, result: { content: [{ type: 'text', text: bigText(5000) }] } },
+      { config: losslessCfg() },
+    )
+    expect(out.folded).toBe(true)
+    expect(out.decision.content?.[0]).not.toHaveProperty('data')
+    expect(isLossless(out.decision)).toBe(true)
+  })
+
+  it('keeps single-block folded output losslessly serializable (code)', () => {
+    const out = decidePostTool(
+      { exec: { name: 'code' }, result: { content: [{ type: 'text', text: bigText(5000) }] } },
+      { config: losslessCfg() },
+    )
+    expect(out.folded).toBe(true)
+    expect(out.decision.content?.[0]).not.toHaveProperty('data')
+    expect(isLossless(out.decision)).toBe(true)
+  })
+
+  it('keeps grep-folded output losslessly serializable', () => {
+    const out = decidePostTool(
+      { exec: { name: 'grep' }, result: { content: [{ type: 'text', text: bigText(5000) }] } },
+      { config: losslessCfg() },
+    )
+    expect(out.folded).toBe(true)
+    expect(isLossless(out.decision)).toBe(true)
+  })
+
+  it('keeps multi-block folded output losslessly serializable', () => {
+    const out = decidePostTool(
+      { exec: { name: 'read' }, result: { content: [{ type: 'text', text: bigText(2500) }, { type: 'text', text: bigText(2500) }] } },
+      { config: losslessCfg() },
+    )
+    expect(out.folded).toBe(true)
+    expect(isLossless(out.decision)).toBe(true)
+  })
+
+  it('keeps error output losslessly serializable and verbatim', () => {
+    const err = `Error: something failed\n${'x'.repeat(50000)}`
+    const out = decidePostTool(
+      { exec: { name: 'bash' }, result: { isError: true, content: [{ type: 'text', text: err }] } },
+      { config: losslessCfg() },
+    )
+    expect(out.folded).toBe(false)
+    // Error results are never folded: the decision is a plain accept and the
+    // upstream harness preserves the original content verbatim.
+    expect(out.decision.kind).toBe('accept')
+    expect(out.decision.content).toBeUndefined()
+    expect(isLossless(out.decision)).toBe(true)
+  })
+
+  it('keeps sub-threshold output losslessly serializable', () => {
+    const out = decidePostTool(
+      { exec: { name: 'read' }, result: { content: [{ type: 'text', text: 'lorem ipsum '.repeat(300) }] } },
+      { config: losslessCfg() },
+    )
+    expect(out.folded).toBe(false)
+    expect(isLossless(out.decision)).toBe(true)
+  })
+
+  it('fails open and returns a lossless accept decision on internal errors', () => {
+    const out = decidePostTool(
+      { exec: { name: 'read' }, result: { content: [{ type: 'text' } as never] } },
+      { config: losslessCfg() },
+    )
+    expect(out.folded).toBe(false)
+    expect(out.decision.kind).toBe('accept')
+    expect(isLossless(out.decision)).toBe(true)
+  })
+})
+
+describe('rebuildContent lossless contract', () => {
+  it('omits undefined-valued keys inherited from the original block', () => {
+    const original = bigText(3000)
+    const content = [
+      { type: 'text', text: original, data: undefined },
+      { type: 'text', text: original, data: undefined },
+    ]
+    const out = __testing.rebuildContent(content, [], 'short', original)
+    expect(out.length).toBe(2)
+    for (const block of out) {
+      expect(Object.prototype.hasOwnProperty.call(block, 'data')).toBe(false)
+    }
+    expect(isLossless(out)).toBe(true)
+  })
+
+  it('keeps the single-block fast path free of the data key', () => {
+    const original = bigText(3000)
+    const out = __testing.rebuildContent([{ type: 'text', text: original, data: undefined }], [], 'short', original)
+    expect(out.length).toBe(1)
+    expect(out[0]).not.toHaveProperty('data')
+    expect(isLossless(out)).toBe(true)
+  })
+
+  it('preserves non-text blocks while stripping undefined keys', () => {
+    const original = bigText(3000)
+    const out = __testing.rebuildContent(
+      [{ type: 'text', text: original }, { type: 'image', data: undefined } as never],
+      [],
+      'short',
+      original,
+    )
+    expect(out.length).toBe(2)
+    expect(isLossless(out)).toBe(true)
   })
 })

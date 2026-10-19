@@ -242,6 +242,20 @@ function aggregateText(content: readonly ToolContentBlock[]): AggregateText {
   return { text: parts.join('\n\n'), segments }
 }
 
+/**
+ * Strip explicit `undefined`-valued keys before a block re-enters the harness.
+ * DSH snapshots every tool result with a strict lossless-JSON walk
+ * (dsh-util-values walkJsonValue) that rejects `undefined` as a property
+ * value, otherwise throwing "tool result must be losslessly JSON-serializable".
+ */
+function losslessBlock(block: ToolContentBlock): ToolContentBlock {
+  const clean: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(block)) {
+    if (value !== undefined) clean[key] = value
+  }
+  return clean as unknown as ToolContentBlock
+}
+
 function rebuildContent(
   content: readonly ToolContentBlock[],
   segments: readonly { start: number; end: number }[],
@@ -249,7 +263,9 @@ function rebuildContent(
   originalText: string,
 ): readonly ToolContentBlock[] {
   if (content.length === 1) {
-    return [{ type: 'text', text: newText, data: undefined }]
+    // Never assign `data: undefined`: the key alone makes the block fail the
+    // lossless snapshot even though the payload is otherwise plain JSON.
+    return [{ type: 'text', text: newText }]
   }
   const out: ToolContentBlock[] = []
   let pos = 0
@@ -261,17 +277,17 @@ function rebuildContent(
 
   for (const block of content) {
     if (block.type !== 'text' || typeof block.text !== 'string') {
-      out.push(block)
+      out.push(losslessBlock(block))
       pos += Buffer.byteLength(`[non-text block: ${block.type}]`, 'utf8')
       continue
     }
     if (pos === 0) {
-      out.push({ ...block, text: prefix.length > 0 ? prefix : newText })
+      out.push(losslessBlock({ ...block, text: prefix.length > 0 ? prefix : newText }))
     } else if (newTextBytes > 0) {
       const tail = newText.slice(-Math.max(0, originalBytes - pos))
-      out.push({ ...block, text: tail.length > 0 ? tail : '' })
+      out.push(losslessBlock({ ...block, text: tail.length > 0 ? tail : '' }))
     } else {
-      out.push({ ...block, text: '' })
+      out.push(losslessBlock({ ...block, text: '' }))
     }
     pos += Buffer.byteLength(block.text, 'utf8')
   }
