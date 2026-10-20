@@ -28,8 +28,9 @@ appropriate.
 | Scenario | Before | After | Saved |
 |---|---:|---:|---:|
 | Read-like tool output (head + tail) | 182,892 B | 24,675 B | 158,217 B (86.5%) |
-| Grep-like output, production path | 19,781 B | 19,781 B | 0 B (0.0%) |
-| Grep folding with a supplied pattern | 19,781 B | 1,301 B | 18,480 B (93.4%) |
+| Grep-like output, production path (pattern supplied) | 29,321 B | 8,145 B | 21,176 B (72.2%) |
+| Grep-like output, production path (no pattern — fail-open) | 29,321 B | 12,321 B | 17,000 B (58.0%) |
+| Grep folding with a supplied pattern (library capability) | 19,781 B | 1,301 B | 18,480 B (93.4%) |
 | RTK build-output compaction | 9,423 B | 2,163 B | 7,260 B (77.0%) |
 
 These are UTF-8 byte reductions of synthetic input passed through the compaction
@@ -55,6 +56,8 @@ dsh plugin --profile web add github:LoveDoLove/dsh-token-saver
 
 ### Why I'm posting
 
-I'd like feedback on whether the grep path should accept a search pattern at the
-call site, since that's what unlocks the 93.4% figure. If that's not the right
-direction, I'd rather know before shipping it.
+The grep path now reads the search pattern from `exec.arguments` (commit
+`8562f48`); the 72.2% row reflects that. I'd like feedback on whether
+requiring the pattern at the call site is the right direction, or whether
+falling back to head/tail truncation when it is absent (current behavior)
+is preferable.

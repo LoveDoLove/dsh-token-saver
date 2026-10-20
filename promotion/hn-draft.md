@@ -24,8 +24,9 @@ mode, RTK off)
 | Scenario | Before | After | Saved |
 |---|---:|---:|---:|
 | Read-like tool output (head + tail) | 182,892 B | 24,675 B | 158,217 B (86.5%) |
-| Grep-like output, production path | 19,781 B | 19,781 B | 0 B (0.0%) |
-| Grep folding with a supplied pattern | 19,781 B | 1,301 B | 18,480 B (93.4%) |
+| Grep-like output, production path (pattern supplied) | 29,321 B | 8,145 B | 21,176 B (72.2%) |
+| Grep-like output, production path (no pattern — fail-open) | 29,321 B | 12,321 B | 17,000 B (58.0%) |
+| Grep folding with a supplied pattern (library capability) | 19,781 B | 1,301 B | 18,480 B (93.4%) |
 | RTK build-output compaction | 9,423 B | 2,163 B | 7,260 B (77.0%) |
 
 UTF-8 byte reductions of synthetic input through the compaction functions
@@ -44,10 +45,12 @@ dsh plugin --profile web add github:LoveDoLove/dsh-token-saver
 - Byte reduction is not token reduction; token reduction is not billing savings.
 - Unit-level simulations of the compaction functions, not end-to-end DSH session
   measurements.
-- The grep path in production today does not receive a search pattern, so the
-  93.4% figure is the library's capability, not the default behavior.
+- The grep path now extracts a search pattern from `exec.arguments`
+  (commit `8562f48`); the 72.2% row reflects that fixed behavior, and the
+  58.0% row is the fail-open check on identical input. The 93.4% figure
+  remains the library's capability, not the default behavior.
 
 ### Open question
 
-Should the grep path accept a search pattern at the call site? That unlocks the
-93.4% figure. Happy to change direction based on feedback.
+Should the grep pattern be required at the call site, or should the plugin
+fall back to head/tail truncation when it is absent (current behavior)?
