@@ -1,5 +1,9 @@
 # DSH Token Saver
 
+<a href="https://trendshift.io/repositories/312537" target="_blank" rel="noopener noreferrer">
+  <img src="https://trendshift.io/api/badge/repositories/312537" alt="LoveDoLove/dsh-token-saver | Trendshift" width="250" height="55" />
+</a>
+
 **A configurable token-efficiency plugin for DeepSeek Harness (DSH).**
 
 [简体中文](README.zh-CN.md) · [Releases](https://github.com/LoveDoLove/dsh-token-saver/releases) · [Issues](https://github.com/LoveDoLove/dsh-token-saver/issues)
