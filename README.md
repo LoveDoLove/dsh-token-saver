@@ -4,11 +4,17 @@
   <a href="https://trendshift.io/repositories/312537"><img src="docs/images/trendshift.svg" alt="DSH Token Saver on Trendshift" width="250" height="55"></a>
 </div>
 
-**A configurable token-efficiency plugin for DeepSeek Harness (DSH).**
+**Trim oversized tool output to keep more of your DSH context window for the model.**
+
+A configurable token-efficiency plugin for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness). It shrinks file reads, grep dumps, and command logs before they enter the conversation, and adds optional context-pressure handling, prompt shaping, local responses, and LLM-summary compaction.
 
 [简体中文](README.zh-CN.md) · [Releases](https://github.com/LoveDoLove/dsh-token-saver/releases) · [Issues](https://github.com/LoveDoLove/dsh-token-saver/issues)
 
-Large tool results (file reads, grep dumps, command logs) consume most of a DSH session's context before the model ever needs all of it. DSH Token Saver trims that output and offers optional prompt shaping, context-pressure handling, local responses, and LLM-summary compaction. Optimizations are configurable and disabled or conservative by default where appropriate.
+## Why
+
+Tool output is the fastest way to fill a context window. A single file read or `grep` dump can add tens of thousands of bytes to a session, most of which the model never needed — and the tokens stay in the conversation for every later turn.
+
+DSH Token Saver intercepts that output at the DSH tool-execution boundary: it keeps the head and tail of long results, folds grep output down to its matches, and compacts structured command output through RTK. Everything is configurable, and the extras (prompt shaping, RTK, local responses, LLM summaries) are off by default.
 
 **Quick install.** Run `dsh plugin --profile web add github:LoveDoLove/dsh-token-saver`. See [Install](#install) for pinned releases and build-script approval.
 
@@ -16,15 +22,15 @@ Large tool results (file reads, grep dumps, command logs) consume most of a DSH 
 
 | Feature | Description | Default |
 |---|---|---|
-| Tool-output trimming | Keeps the head and tail of oversized tool results | Enabled in conservative mode |
-| Grep folding | Folds large grep results while retaining useful context | Enabled in conservative mode |
-| Context-pressure handling | Tracks context pressure and can trigger compaction in higher modes | Conservative mode |
+| Tool-output trimming | Keeps the head and tail of oversized tool results | On in every mode except `off` |
+| Grep folding | Folds large grep results while retaining useful context | On in every mode except `off` |
+| Context-pressure handling | Tracks context pressure and can trigger compaction in higher modes | Off in `conservative`, on in `balanced`/`aggressive` |
 | RTK integration | Compacts supported command output through RTK | Off |
 | Caveman prompt shaping | Uses a configurable terse prompt style | Off |
 | Ponytail prompt shaping | Applies a minimal-change task-solving style | Off |
 | Local responses | Answers supported probe shapes locally without an LLM call | Off |
-| LLM-summary compaction | Optionally uses an LLM summary for compaction | Off |
-| Prompt-cache stability | Optionally stabilizes system-prompt section ordering | Off |
+| LLM-summary compaction | Optionally uses an LLM summary for compaction | Off (only effective in `balanced`/`aggressive`) |
+| Prompt-cache stability | Stabilizes system-prompt section ordering | Applies in every mode except `off` |
 | Web settings | Configure the plugin from **Settings → Token Saver** | Available on DSH Web |
 
 ## Install
@@ -47,6 +53,19 @@ dsh plugin --profile web add github:LoveDoLove/dsh-token-saver#v1.0.2
 
 The prebuilt artifact `dsh-token-saver-1.0.2.tgz` is also available from the [v1.0.2 release](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.2) and can be installed as a local package without a local build environment.
 
+> The v1.0.2 release predates the grep-pattern fix (commit `8562f48`). Install from `main` or pin a newer tag if you need the current production behavior.
+
+## How it works
+
+DSH Token Saver hooks into the DSH tool-execution pipeline:
+
+1. **Post-execute hook** — after a tool returns, oversized output is trimmed to head + tail or folded (grep results keep their matches; RTK compacts structured command output).
+2. **Context-pressure handling** — when context pressure crosses the threshold, higher modes can trigger compaction before the next step.
+3. **LLM-summary compaction** — in `balanced`/`aggressive` mode, an optional LLM summary can replace bulky output (requires a configured `callLlm` provider).
+4. **Prompt-cache stability** — system-prompt sections are reordered so pinned, cacheable sections stay stable across turns.
+
+All paths are fail-open: if an optimization errors, the original content is preserved unchanged.
+
 
 ## Configuration
 
@@ -65,18 +84,28 @@ dsh-token-saver:
   llmSummaryEnabled: false
 ```
 
+### Key options
+
+| Option | Default | Notes |
+|---|---|---|
+| `mode` | `conservative` | Master switch; see [Modes](#modes). |
+| `headBytes` / `tailBytes` | `16384` / `8192` | Bytes kept from the start and end of a trimmed tool result. Results at or below `headBytes + tailBytes + 256` are left untouched. |
+| `grepMaxMatches` / `grepContextLines` | `30` / `2` | Matches kept when folding a grep result, and the context lines kept around each match. |
+| `grepHeadBytes` / `grepTailBytes` | `8192` / `4096` | Byte budget for the folded grep result. |
+| `pressureThreshold` | `0.5` | Context-pressure ratio above which higher modes may compact. |
+| `llmSummaryEnabled` | `false` | Only effective in `balanced` or `aggressive` mode, and only when a `callLlm` provider is wired in. |
+| `replaceBasicCompaction` | `true` in `aggressive` | Replaces DSH's built-in compaction provider with the LLM-summary engine. |
+| `includeToolNames` / `excludeToolNames` | `[]` | Restrict trimming to specific tools, or skip specific tools. |
+| `cacheStableSections` | `[]` | System-prompt section ids to pin first, so they stay in a stable position for prompt caching. |
+
 ### Modes
 
-- **off** — disables token-saving transformations.
+- **off** — disables token-saving transformations. (RTK still runs when `rtkEnabled: true`.)
 - **conservative** — trims/folds oversized tool output while retaining the normal DSH compaction path.
 - **balanced** — enables additional context-pressure handling.
-- **aggressive** — enables more extensive compaction behavior; review the configuration before enabling it.
+- **aggressive** — enables more extensive compaction behavior (including replacing the basic compaction provider by default); review the configuration before enabling it.
 
 Exact behavior depends on the individual options and the installed DSH version. Check the settings panel and configuration defaults for the current build.
-
-## Benchmarks
-
-This project does not publish synthetic benchmark results. Savings are measured from real DSH sessions through the persisted telemetry described in [Statistics](#statistics); see [Benchmark methodology](docs/benchmark-methodology.md) for how to reproduce and report measurements.
 
 ## Statistics
 
@@ -100,7 +129,7 @@ The same tool output can be compacted twice — once by the post-execute hook an
 
 ## Benchmark
 
-Verified byte-reduction measurements on plugin v1.0.2 (DSH 0.2.1-rc.2, Node v24.22.0, Linux, mode `conservative`, `rtkEnabled: false`). Full methodology and reproducible commands are in [docs/benchmark-results.md](docs/benchmark-results.md).
+Verified byte-reduction measurements on plugin v1.0.2 (DSH 0.2.1-rc.2, Node v24.22.0, Linux, mode `conservative`, `rtkEnabled: false`). Every scenario is a deterministic in-process call on synthetic input — no DSH session and no LLM request are involved. Full methodology and reproducible commands are in [docs/benchmark-results.md](docs/benchmark-results.md); how to reproduce and report measurements is in [docs/benchmark-methodology.md](docs/benchmark-methodology.md).
 
 | Scenario | Input bytes | Output bytes | Bytes saved | Reduction |
 |---|---:|---:|---:|---:|
@@ -110,7 +139,9 @@ Verified byte-reduction measurements on plugin v1.0.2 (DSH 0.2.1-rc.2, Node v24.
 | Grep folding with a supplied pattern (library capability, 19,781-byte input) | 19,781 | 1,301 | 18,480 | 93.4% |
 | RTK build-output compaction | 9,423 | 2,163 | 7,260 | 77.0% |
 
-These are UTF-8 byte reductions of synthetic input passed through the compaction functions in-process. They are not model token counts, token-cost savings, latency improvements, or task-quality evidence. In production today the grep path does not receive a search pattern, so the 93.4% figure is the library's capability, not the default behavior.
+These are UTF-8 byte reductions of synthetic input passed through the compaction functions in-process. They are not model token counts, token-cost savings, latency improvements, or task-quality evidence. The production grep path now extracts the search pattern from `exec.arguments` (commit `8562f48`); the 93.4% figure is the folding library's capability on a different, smaller input, not the default production-path result.
+
+Reproducibility differs per row: the read-like, library-level, and RTK rows are reproduced by the committed `npx tsx bench-tmp.ts` script, while the two 29,321-byte production rows were measured on an input whose generator is not committed, so they cannot be re-run from this repository as committed. See [Reproducibility status](docs/benchmark-results.md#reproducibility-status) in the benchmark results document.
 
 ## Compatibility
 

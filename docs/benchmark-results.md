@@ -18,8 +18,10 @@ results.
 - Node.js: v24.22.0
 - OS: Linux 6.18.33.2-microsoft-standard-WSL2 (WSL2)
 - Working tree: clean
-- Benchmark script: `bench-tmp.ts` (committed for reproducibility). The grep
-  fix probe script is `bench-repro.ts`.
+- Benchmark script: `bench-tmp.ts` (committed for reproducibility). It covers
+  scenarios A, B-library, and C. The B-production input (29,321 bytes) is not
+  reproduced by the committed script — see
+  [Reproducibility status](#reproducibility-status).
 
 ## Configuration
 
@@ -162,7 +164,22 @@ Run with Node.js and `tsx` from the repository root on a clean tree:
 npx tsx bench-tmp.ts
 ```
 
-with `bench-tmp.ts` containing:
+### Reproducibility status
+
+- Scenario A, scenario B-library, and scenario C are reproducible with the
+  committed `bench-tmp.ts`: 182,892 → 24,675 bytes (86.5%), 19,781 → 1,301
+  bytes (93.4%, `matchCount` 30, `truncatedMatches` 470), and 9,423 → 2,163
+  bytes (77.0%).
+- The **B-production** rows in the Results section were measured on a
+  400-line, 29,321-byte grep-like input that is **not** reproduced by the
+  committed script and whose generator is not committed to this repository.
+  The committed script builds a 500-line, 19,781-byte input instead, which is
+  below the `headBytes + tailBytes + 256` threshold (24,832 bytes), so the
+  production path folds nothing on it (0.0% reduction, `folded: false`).
+  The 29,321-byte figures are therefore historical measurements that cannot be
+  re-run from this repository as committed; treat them as unverified
+  reproduction-wise until the generator is restored.
+- The script reproduced by the command above is:
 
 ```ts
 import { resolveConfig } from './src/config.ts';
