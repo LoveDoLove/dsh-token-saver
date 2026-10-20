@@ -8,7 +8,9 @@
 
 [简体中文](README.zh-CN.md) · [Releases](https://github.com/LoveDoLove/dsh-token-saver/releases) · [Issues](https://github.com/LoveDoLove/dsh-token-saver/issues)
 
-DSH Token Saver reduces unnecessary context from verbose tool output and offers optional prompt shaping, context-pressure handling, local responses, and LLM-summary compaction. Optimizations are configurable and disabled or conservative by default where appropriate.
+Large tool results (file reads, grep dumps, command logs) consume most of a DSH session's context before the model ever needs all of it. DSH Token Saver trims that output and offers optional prompt shaping, context-pressure handling, local responses, and LLM-summary compaction. Optimizations are configurable and disabled or conservative by default where appropriate.
+
+**Quick install.** Run `dsh plugin --profile web add github:LoveDoLove/dsh-token-saver`. See [Install](#install) for pinned releases and build-script approval.
 
 ## Features
 
@@ -71,6 +73,10 @@ dsh-token-saver:
 - **aggressive** — enables more extensive compaction behavior; review the configuration before enabling it.
 
 Exact behavior depends on the individual options and the installed DSH version. Check the settings panel and configuration defaults for the current build.
+
+## Benchmarks
+
+This project does not publish synthetic benchmark results. Savings are measured from real DSH sessions through the persisted telemetry described in [Statistics](#statistics); see [Benchmark methodology](docs/benchmark-methodology.md) for how to reproduce and report measurements.
 
 ## Statistics
 

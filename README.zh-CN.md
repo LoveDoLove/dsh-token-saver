@@ -8,7 +8,9 @@
 
 [English](README.md) · [版本发布](https://github.com/LoveDoLove/dsh-token-saver/releases) · [问题反馈](https://github.com/LoveDoLove/dsh-token-saver/issues)
 
-DSH Token Saver 用于减少冗长工具输出占用的上下文，并提供可选的提示词压缩、上下文压力处理、本地响应和 LLM 摘要压缩。各项优化可以独立配置；额外优化默认关闭，基础模式默认保持保守。
+文件读取、grep 结果、命令日志等大型工具输出会在模型真正需要之前占用 DSH 会话的大部分上下文。DSH Token Saver 用于裁剪这类输出，并提供可选的提示词压缩、上下文压力处理、本地响应和 LLM 摘要压缩。各项优化可以独立配置；额外优化默认关闭，基础模式默认保持保守。
+
+**快速安装。** 运行 `dsh plugin --profile web add github:LoveDoLove/dsh-token-saver`。指定版本安装与构建脚本授权见 [安装](#安装)。
 
 ## 功能
 
@@ -71,6 +73,10 @@ dsh-token-saver:
 - **aggressive**：启用更积极的压缩行为；使用前请检查相关配置。
 
 实际行为取决于各项配置和当前安装的 DSH 版本。请以当前版本的设置面板和配置默认值为准。
+
+## 基准测试
+
+本项目不发布合成基准测试结果。节省量通过下方 [统计信息](#统计信息) 中描述的持久化遥测在真实 DSH 会话中测量；如何复现和报告测量结果请参见 [基准测试方法](docs/benchmark-methodology.md)。
 
 ## 统计信息
 
