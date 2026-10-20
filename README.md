@@ -98,6 +98,19 @@ The same tool output can be compacted twice — once by the post-execute hook an
 - **Opt-in extras:** RTK, prompt shaping, local responses, and LLM-summary compaction are independently configurable.
 - **No quality guarantee:** token reduction can change the information visible to a model. Review settings carefully, especially for aggressive compaction.
 
+## Benchmark
+
+Verified byte-reduction measurements on plugin v1.0.2 (DSH 0.2.1-rc.2, Node v24.22.0, Linux, mode `conservative`, `rtkEnabled: false`). Full methodology and reproducible commands are in [docs/benchmark-results.md](docs/benchmark-results.md).
+
+| Scenario | Input bytes | Output bytes | Bytes saved | Reduction |
+|---|---:|---:|---:|---:|
+| Read-like tool output (head + tail) | 182,892 | 24,675 | 158,217 | 86.5% |
+| Grep-like tool output (production path) | 19,781 | 19,781 | 0 | 0.0% |
+| Grep folding with a supplied pattern (library capability) | 19,781 | 1,301 | 18,480 | 93.4% |
+| RTK build-output compaction | 9,423 | 2,163 | 7,260 | 77.0% |
+
+These are UTF-8 byte reductions of synthetic input passed through the compaction functions in-process. They are not model token counts, token-cost savings, latency improvements, or task-quality evidence. In production today the grep path does not receive a search pattern, so the 93.4% figure is the library's capability, not the default behavior.
+
 ## Compatibility
 
 Designed to coexist with:
