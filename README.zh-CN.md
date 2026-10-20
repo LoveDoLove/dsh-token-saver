@@ -70,7 +70,7 @@ dsh-token-saver:
 
 ## 统计信息
 
-Web 设置面板显示实时节省遥测数据，累计统计结果会持久化到 `~/.dsh/token-saver/saver-stats.json`（或 `$DSH_HOME/token-saver/saver-stats.json`），因此主机重启后仪表板仍会显示历史节省情况。
+Web 设置面板显示实时节省遥测数据，累计统计结果会持久化到 `~/.dsh/token-saver/stats.json`（或 `$DSH_HOME/token-saver/stats.json`），因此主机重启后仪表板仍会显示历史节省情况。
 
 - **已节省** — 所有压缩流程累计减少的字节数。
 - **节省比例** — 节省字节数占原始字节数的百分比。

@@ -70,7 +70,7 @@ Exact behavior depends on the individual options and the installed DSH version. 
 
 ## Statistics
 
-The Web settings panel shows live savings telemetry, and the totals are persisted to `~/.dsh/token-saver/saver-stats.json` (or `$DSH_HOME/token-saver/saver-stats.json`) so the dashboard still reports savings after a host restart.
+The Web settings panel shows live savings telemetry, and the totals are persisted to `~/.dsh/token-saver/stats.json` (or `$DSH_HOME/token-saver/stats.json`) so the dashboard still reports savings after a host restart.
 
 - **Saved** — bytes reduced across all compaction passes.
 - **Saved ratio** — saved bytes as a percentage of original bytes.
