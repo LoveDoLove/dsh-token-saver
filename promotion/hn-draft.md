@@ -18,7 +18,7 @@ Paths:
 
 Configurable; disabled or conservative by default where appropriate.
 
-### Verified measurements (v1.0.2, DSH 0.2.1-rc.2, Node v24.22.0, Linux, conservative
+### Verified measurements (v1.0.3, DSH 0.2.1-rc.2, Node v24.22.0, Linux, conservative
 mode, RTK off)
 
 | Scenario | Before | After | Saved |

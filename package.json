@@ -3,7 +3,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "DeepSeek Harness plugin: trims tool output, applies prompt shaping (Caveman & Ponytail), instant local responses, context-pressure handling, optional LLM-summary compaction, stable prompt-cache layout, and a Web settings UI with persisted savings telemetry.",
   "type": "module",
   "private": false,

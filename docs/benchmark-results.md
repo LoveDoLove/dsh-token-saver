@@ -8,12 +8,15 @@ results.
 
 ## Build and environment
 
-- Plugin version: 1.0.2
+- Plugin version: 1.0.3
 - Grep-folding fix commit: `8562f48234cf16b2261ccb3e63f6c5c233545b00`
   (`feat(tool-result-trim): read grep pattern from exec.arguments in production path`).
   Scenario A and C tables below were measured on the earlier doc commit
   `d7aa522`; scenario B was re-measured after the fix on identical code and
   environment, and its tables are current as of `8562f48`.
+- The `src/` tree is unchanged since the measured commits except for the
+  grep-folding fix, which touches only the grep path and therefore does not
+  affect scenarios A and C.
 - DSH version: 0.2.1-rc.2
 - Node.js: v24.22.0
 - OS: Linux 6.18.33.2-microsoft-standard-WSL2 (WSL2)
