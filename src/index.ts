@@ -6,6 +6,7 @@ import { stabilizeForCache } from './strategies/prompt-cache.js'
 import { LlmSummaryCompactionEngine, DEFAULT_COMPACTION_PROMPT } from './strategies/llm-summary.js'
 import { createRtkStats, compressMessages, mergeRtkStats, type RtkStats } from './rtk/index.js'
 import { SettingsManager } from './settings.js'
+import { StatsStore } from './stats-store.js'
 import { createApiRoutes } from './routes.js'
 import {
   activePrompts,
@@ -67,10 +68,13 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
   const agentForSession = makeAgentAccessor(scope)
   const callLlm = makeLlmCaller(resolved, ownLogger)
   const sessionEventsProvider = makeSessionEventsAccessor(scope)
+  // Two views of the same figures: `rtkStats` accumulates this process's
+  // compression, `statsStore` persists the historical totals across restarts.
   const rtkStats: RtkStats = createRtkStats()
+  const statsStore = new StatsStore()
 
   const settingsManager = new SettingsManager()
-  const runtimeState = settingsManager.init(resolved, rtkStats)
+  const runtimeState = settingsManager.init(resolved, rtkStats, () => statsStore.get())
 
   // Mount WebServer API routes if webServer service is available
   if (typeof (scope as any).inject === 'function') {
@@ -133,7 +137,7 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
       const exec = arg1 as ToolExecutionLike
       const result = (arg2 ?? {}) as Readonly<ToolResultLike>
       const next = arg3 as () => Promise<PostToolDecision>
-      return handlePostTool(exec, result, next, runtimeState.config, runtimeState.rtkStats)
+      return handlePostTool(exec, result, next, runtimeState.config, runtimeState.rtkStats, statsStore)
     }
     // Backward compatibility for 2-argument signature: ({ exec, result }, next)
     if (typeof arg2 === 'function') {
@@ -141,13 +145,13 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
       const exec = payload?.exec ?? (arg1 as ToolExecutionLike)
       const result = (payload?.result ?? {}) as Readonly<ToolResultLike>
       const next = arg2 as () => Promise<PostToolDecision>
-      return handlePostTool(exec, result, next, runtimeState.config, runtimeState.rtkStats)
+      return handlePostTool(exec, result, next, runtimeState.config, runtimeState.rtkStats, statsStore)
     }
     // Defensive fallback when invoked without next
     const exec = arg1 as ToolExecutionLike
     const result = (arg2 ?? {}) as Readonly<ToolResultLike>
     const next = () => Promise.resolve({ kind: 'accept' as const })
-    return handlePostTool(exec, result, next, runtimeState.config, runtimeState.rtkStats)
+    return handlePostTool(exec, result, next, runtimeState.config, runtimeState.rtkStats, statsStore)
   }
 
   // 2) Context pressure pre-step hook
@@ -221,6 +225,9 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
           // ignores no-op results, so uncompressed requests add nothing.
           const streamStats = compressMessages(req, { enabled: true })
           mergeRtkStats(rtkStats, streamStats)
+          // Persist the same invocation exactly once; `streamStats` is this
+          // request's own accumulator, never the shared one.
+          statsStore.record(streamStats)
         } catch {
           // Frozen/readonly options: skip, fail open.
         }
@@ -278,17 +285,24 @@ async function handlePostTool(
   next: () => Promise<PostToolDecision>,
   resolved: ResolvedConfig,
   rtkStats?: RtkStats,
+  statsStore?: StatsStore,
 ): Promise<PostToolDecision> {
   const payload = { exec, result }
+  // A per-call accumulator keeps one tool result from being counted into the
+  // session totals and the persisted totals a second time.
+  const callStats = createRtkStats()
   const folded = decidePostTool(payload, {
     config: resolved,
     telemetry: resolved.telemetry,
-    rtkStats,
+    rtkStats: callStats,
   })
   const upstream = typeof next === 'function' ? await next() : { kind: 'accept' as const }
   if (!folded.folded) return upstream
   if (upstream.kind === 'block') return upstream
   if (upstream.kind === 'accept' && upstream.value !== undefined) return upstream
+  // Only the folded result that actually reaches the model counts as savings.
+  if (rtkStats) mergeRtkStats(rtkStats, callStats)
+  statsStore?.record(callStats)
   return { ...upstream, ...folded.decision }
 }
 

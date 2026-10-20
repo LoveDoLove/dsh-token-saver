@@ -60,10 +60,24 @@ export interface PublicLocalOptimize {
   filepath: boolean
 }
 
+/**
+ * Cumulative savings restored from disk, kept separately from the per-process
+ * `RtkStats` accumulator so historical totals survive a host restart.
+ */
+export interface TotalSavings {
+  bytesBefore: number
+  bytesAfter: number
+  saved: number
+  calls: number
+  blocks: number
+}
+
 export interface RuntimeState {
   enabled: boolean
   config: ResolvedConfig
   rtkStats?: RtkStats
+  /** Live snapshot of the persisted totals; absent when telemetry is unbound. */
+  totals?: () => TotalSavings
 }
 
 export const CAVEMAN_LEVELS: CavemanLevel[] = [
@@ -78,13 +92,18 @@ export const CAVEMAN_LEVELS: CavemanLevel[] = [
 
 export const PONYTAIL_LEVELS: PonytailLevel[] = ['off', 'lite', 'full', 'ultra']
 
-export function getLiveSavings(rtkStats?: RtkStats): PublicSavings {
-  const orig = rtkStats?.bytesBefore ?? 0
-  const comp = rtkStats?.bytesAfter ?? 0
-  const saved = rtkStats?.saved ?? Math.max(0, orig - comp)
+export function getLiveSavings(rtkStats?: RtkStats, totals?: TotalSavings): PublicSavings {
+  // Persisted totals are the source of truth when bound; the accumulator is
+  // the fallback for callers that only hold this process's `RtkStats`.
+  const orig = totals ? totals.bytesBefore : (rtkStats?.bytesBefore ?? 0)
+  const comp = totals ? totals.bytesAfter : (rtkStats?.bytesAfter ?? 0)
+  const saved = totals ? Math.max(0, totals.saved) : (rtkStats?.saved ?? Math.max(0, orig - comp))
   const percent = orig > 0 ? Math.round((saved / orig) * 100) : 0
-  const blocks = rtkStats?.hits?.length ?? 0
-  const calls = rtkStats?.hits?.length ?? 0
+  // `blocks` counts compressed text blocks, `calls` counts invocations that
+  // produced at least one. The accumulator has no call boundary, so its
+  // fallback mirrors hits.
+  const blocks = totals ? Math.max(0, totals.blocks) : (rtkStats?.hits?.length ?? 0)
+  const calls = totals ? Math.max(0, totals.calls) : (rtkStats?.hits?.length ?? 0)
   const promptCalls = 0
   const summary = calls > 0
     ? `${calls} calls · ${percent}% (${(saved / 1024).toFixed(1)} KB) saved`
@@ -132,7 +151,7 @@ export class SettingsManager {
     }
   }
 
-  init(initialConfig: ResolvedConfig, rtkStats?: RtkStats): RuntimeState {
+  init(initialConfig: ResolvedConfig, rtkStats?: RtkStats, totals?: () => TotalSavings): RuntimeState {
     const stored = this.load()
     let enabled = true
     if (typeof stored.enabled === 'boolean') {
@@ -196,6 +215,7 @@ export class SettingsManager {
       enabled,
       config: mergedConfig,
       rtkStats,
+      totals,
     }
   }
 
@@ -209,7 +229,7 @@ export class SettingsManager {
       },
       cavemanLevels: CAVEMAN_LEVELS,
       ponytailLevels: PONYTAIL_LEVELS,
-      savings: getLiveSavings(state.rtkStats),
+      savings: getLiveSavings(state.rtkStats, state.totals?.()),
     }
   }
 
