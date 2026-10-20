@@ -120,7 +120,97 @@ describe('decidePostTool', () => {
     )
     expect(out.folded).toBe(false)
   })
+
+  it('does not drop lines from a grep result when no search pattern is supplied', () => {
+    // Small enough that head/tail truncation does not fire, so the output must be
+    // byte-identical to the input: no pattern-based folding occurs.
+    const lines = Array.from({ length: 20 }, (_, i) => `/src/foo.ts:${i + 1}: match ${i} with context`)
+    const text = lines.join('\n')
+    const cfg = resolveConfig({ includeToolNames: ['grep'], mode: 'balanced' })
+    const out = decidePostTool(
+      { exec: { id: 'x', tool: { name: 'grep' } }, result: { content: [{ type: 'text', text }] } },
+      { config: cfg },
+    )
+    expect(out.originalBytes).toBe(Buffer.byteLength(text, 'utf8'))
+    expect(out.trimmedBytes).toBe(out.originalBytes)
+    expect(out.folded).toBe(false)
+    const decisionContent = (out.decision as { content?: readonly { text?: string }[] }).content
+    expect(Array.isArray(decisionContent)).toBe(true)
+    expect((decisionContent as { text?: string }[])[0]?.text).toBe(text)
+  })
+
+  it('folds non-matching lines when the grep pattern is supplied in exec.arguments', () => {
+    const text = grepDump(400)
+    const cfg = grepCfg()
+    expect(Buffer.byteLength(text, 'utf8')).toBeGreaterThan(32 * 1024)
+
+    const out = decidePostTool(
+      { exec: { name: 'grep', arguments: { pattern: 'needle' } }, result: { content: [{ type: 'text', text }] } },
+      { config: cfg },
+    )
+    const folded = out.decision.content?.[0]?.text ?? ''
+    expect(out.folded).toBe(true)
+    expect(out.trimmedBytes).toBeLessThan(out.originalBytes)
+    expect(folded).toContain('needle')
+    expect(folded).toMatch(/non-matching lines omitted/)
+    // A line that never matched and sits outside the context window is gone.
+    expect(folded).not.toContain('filler 0 ')
+  })
+
+  it('preserves the grep result when the pattern matches nothing', () => {
+    const text = grepDump(400)
+    const cfg = grepCfg()
+    const out = decidePostTool(
+      { exec: { name: 'grep', arguments: { pattern: 'absent-needle' } }, result: { content: [{ type: 'text', text }] } },
+      { config: cfg },
+    )
+    // No matches means no pattern folding, only the byte-range fallback.
+    expect(out.decision.content?.[0]?.text ?? '').not.toContain('non-matching lines omitted')
+  })
+
+  it('preserves the grep result when the pattern is not a non-empty string', () => {
+    const text = grepDump(400)
+    const cfg = grepCfg()
+    for (const args of [{}, { pattern: '' }, { pattern: 42 }, { pattern: null }, null, [], 'needle']) {
+      const out = decidePostTool(
+        { exec: { name: 'grep', arguments: args }, result: { content: [{ type: 'text', text }] } },
+        { config: cfg },
+      )
+      const body = out.decision.content?.[0]?.text ?? ''
+      expect(body).not.toContain('non-matching lines omitted')
+    }
+  })
+
+  it('ignores the pattern argument for non-grep tools', () => {
+    const text = grepDump(400)
+    const out = decidePostTool(
+      { exec: { name: 'read', arguments: { pattern: 'needle' } }, result: { content: [{ type: 'text', text }] } },
+      { config: grepCfg() },
+    )
+    expect(out.decision.content?.[0]?.text ?? '').not.toContain('non-matching lines omitted')
+  })
 })
+
+/** Grep-shaped dump: every 20th line matches `needle`, the rest are filler. */
+function grepDump(files: number): string {
+  const lines: string[] = []
+  for (let f = 0; f < files; f++) {
+    lines.push(`/src/mod${f}.ts:`)
+    for (let i = 0; i < 20; i++) {
+      lines.push(
+        i === 10
+          ? `/src/mod${f}.ts:${i + 1}: const needle${f} = find(needle)`
+          : `/src/mod${f}.ts:${i + 1}: filler ${i} value ${'x'.repeat(40)}`,
+      )
+    }
+  }
+  return lines.join('\n')
+}
+
+/** Grep folding sits behind the same head+tail+256 gate as plain truncation. */
+function grepCfg() {
+  return resolveConfig({ includeToolNames: ['grep'], mode: 'balanced', rtkEnabled: false })
+}
 
 /**
  * Faithful reimplementation of the lossless-JSON rules enforced by DSH

@@ -75,6 +75,13 @@ export function shouldHandle(toolName: string | undefined, cfg: ResolvedConfig):
   return true
 }
 
+/** Reads `pattern` from a Grep call's arguments; undefined when unusable. */
+function grepPattern(args: unknown): string | undefined {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return undefined
+  const pattern = (args as { pattern?: unknown }).pattern
+  return typeof pattern === 'string' && pattern.length > 0 ? pattern : undefined
+}
+
 export interface PostToolPayloadLike {
   readonly exec?: ToolExecutionLike
   readonly result?: ToolResultLike
@@ -161,7 +168,11 @@ export function decidePostTool(payload: PostToolPayloadLike, options: ToolResult
 
     if (!rtkApplied) {
       if (toolName && GREP_LIKE_TOOLS.has(toolName)) {
+        // DSH passes the parsed tool arguments as exec.arguments. Fold only
+        // when a usable pattern is present; foldGrepResult falls back to
+        // head/tail truncation when it is absent.
         const result = foldGrepResult(aggregated.text, {
+          pattern: grepPattern(payload.exec?.arguments),
           grepHeadBytes: config.grepHeadBytes,
           grepTailBytes: config.grepTailBytes,
           grepMaxMatches: config.grepMaxMatches,
