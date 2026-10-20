@@ -33,6 +33,15 @@ If your DSH installation asks for build-script approval, follow the approval ins
 
 > The GitHub repository and GitHub Releases are the source of truth for this project. Use a version-pinned release when one is available.
 
+Install the current v1.0.2 release explicitly:
+
+```bash
+dsh plugin --profile web add github:LoveDoLove/dsh-token-saver#v1.0.2
+```
+
+The prebuilt artifact `dsh-token-saver-1.0.2.tgz` is also available from the [v1.0.2 release](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.2) and can be installed as a local package without a local build environment.
+
+
 ## Configuration
 
 The settings panel is available in DSH Web under **Settings → Token Saver**. You can also configure the plugin through its DSH bundle configuration.
@@ -58,6 +67,19 @@ dsh-token-saver:
 - **aggressive** — enables more extensive compaction behavior; review the configuration before enabling it.
 
 Exact behavior depends on the individual options and the installed DSH version. Check the settings panel and configuration defaults for the current build.
+
+## Statistics
+
+The Web settings panel shows live savings telemetry, and the totals are persisted to `~/.dsh/token-saver/saver-stats.json` (or `$DSH_HOME/token-saver/saver-stats.json`) so the dashboard still reports savings after a host restart.
+
+- **Saved** — bytes reduced across all compaction passes.
+- **Saved ratio** — saved bytes as a percentage of original bytes.
+- **Calls** — compaction invocations that produced at least one trimmed block.
+- **Blocks** — text blocks that were actually compacted.
+
+The same tool output can be compacted twice — once by the post-execute hook and again by the LLM/stream path — so `calls` counts events and `blocks` counts compacted text. Saved bytes stay exact because per-pass savings add up to the total. Telemetry reads and writes are fail-open: a broken store must never affect compression behavior.
+
+> v1.0.2 introduced persistent cumulative savings. Earlier versions reset the dashboard to zero on every restart.
 
 ## Safety behavior
 

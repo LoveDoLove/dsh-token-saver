@@ -33,6 +33,15 @@ dsh plugin --profile web add github:LoveDoLove/dsh-token-saver
 
 > 本项目以 GitHub 仓库和 GitHub Releases 为准；有固定版本的正式发行版时，建议安装指定版本。
 
+安装当前指定的 v1.0.2 正式版本：
+
+```bash
+dsh plugin --profile web add github:LoveDoLove/dsh-token-saver#v1.0.2
+```
+
+预构建产物 `dsh-token-saver-1.0.2.tgz` 也可从 [v1.0.2 版本发布页](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.2) 下载，作为本地包安装，无需本地构建环境。
+
+
 ## 配置
 
 在 DSH Web 中打开 **Settings → Token Saver**，即可使用设置面板。也可以通过 DSH bundle 配置文件进行配置。
@@ -58,6 +67,19 @@ dsh-token-saver:
 - **aggressive**：启用更积极的压缩行为；使用前请检查相关配置。
 
 实际行为取决于各项配置和当前安装的 DSH 版本。请以当前版本的设置面板和配置默认值为准。
+
+## 统计信息
+
+Web 设置面板显示实时节省遥测数据，累计统计结果会持久化到 `~/.dsh/token-saver/saver-stats.json`（或 `$DSH_HOME/token-saver/saver-stats.json`），因此主机重启后仪表板仍会显示历史节省情况。
+
+- **已节省** — 所有压缩流程累计减少的字节数。
+- **节省比例** — 节省字节数占原始字节数的百分比。
+- **生效请求** — 产生至少一个被压缩文本块的压缩调用次数。
+- **压缩块数** — 实际被压缩的文本块数量。
+
+同一工具输出可能被压缩两次 —— 一次由 post-execute 钩子执行，另一次由 LLM/流式路径执行 —— 因此 `calls` 统计压缩事件，`blocks` 统计被压缩的文本块。由于每次压缩节省的字节数会累加到总量中，节省字节数保持精确。遥测的读写均为故障开放模式：存储异常不得影响压缩行为。
+
+> v1.0.2 起引入持久化累计节省统计。更早版本每次重启都会将仪表板重置为零。
 
 ## 安全行为
 
