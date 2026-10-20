@@ -9,12 +9,17 @@ results.
 ## Build and environment
 
 - Plugin version: 1.0.2
-- Commit: `95b66ea4c660a7f1be047fba91bfad0777958cff`
+- Grep-folding fix commit: `8562f48234cf16b2261ccb3e63f6c5c233545b00`
+  (`feat(tool-result-trim): read grep pattern from exec.arguments in production path`).
+  Scenario A and C tables below were measured on the earlier doc commit
+  `d7aa522`; scenario B was re-measured after the fix on identical code and
+  environment, and its tables are current as of `8562f48`.
 - DSH version: 0.2.1-rc.2
 - Node.js: v24.22.0
 - OS: Linux 6.18.33.2-microsoft-standard-WSL2 (WSL2)
 - Working tree: clean
-- Benchmark script: `bench-tmp.ts` (committed for reproducibility)
+- Benchmark script: `bench-tmp.ts` (committed for reproducibility). The grep
+  fix probe script is `bench-repro.ts`.
 
 ## Configuration
 
@@ -37,13 +42,23 @@ Each scenario is a deterministic, in-process call. No DSH session or LLM request
   tool name `read` (a `READ_LIKE_TOOLS` entry), so the production head/tail
   truncation path is taken. Unit-level simulation, not an end-to-end DSH session.
 - **Scenario B-production — grep-like tool output through the production path.**
-  A 500-line grep-style result where every line matches `match`, 19,781 bytes total.
-  Exercised through `decidePostTool` with tool name `grep` (a `GREP_LIKE_TOOLS`
-  entry). The production call site in `src/strategies/tool-result-trim.ts:164` does
-  **not** pass a `pattern` to `foldGrepResult`, and `DEFAULTS.pattern` is `''`.
-  Therefore `foldGrepResult` falls back to byte-based head/tail truncation and
-  reports `matchCount: 0`, `truncatedMatches: 0`. This is the behavior the plugin
-  ships in production today for this input shape.
+  A 400-line grep-style result where every 20th line matches `needle`, 29,321
+  bytes total — above the `headBytes + tailBytes + 256` threshold (24,832
+  bytes), so the folding path actually fires. Exercised through
+  `decidePostTool` with tool name `grep` (a `GREP_LIKE_TOOLS` entry) in two
+  variants on identical input:
+  - **B-prod-pattern** (`exec: { name: 'grep', arguments: { pattern: 'needle' } }`):
+    matches the fixed behavior at commit `8562f48`, where
+    `grepPattern(payload.exec?.arguments)` reads the search pattern and
+    `foldGrepResult` folds non-matching lines, keeps matches plus context, and
+    reports match truncation.
+  - **B-prod-nopattern** (`exec: { name: 'grep' }` with no `arguments`):
+    fail-open check. The fix changes only pattern extraction, so this run
+    exercises the same code path plugin v1.0.2 shipped before the fix
+    (byte-based head/tail truncation). It is the honest pre/post comparison
+    for this input: the pre-fix doc table at 19,781 bytes reported 0.0%
+    because that input was below the threshold and no compaction was applied
+    at all — an input-size difference, not a code difference.
 - **Scenario B-library — direct `foldGrepResult` with a supplied pattern.** Same
   500-line input, but `foldGrepResult` is called directly with `pattern: 'match'`,
   exercising the match-retention, context-line, and match-truncation logic.
@@ -66,17 +81,40 @@ All three runs produced identical numbers.
 | 3 | 182,892 | 24,675 | 158,217 | 86.5% |
 | Median | | | | 86.5% |
 
-### Scenario B-production (production path, no pattern)
+### Scenario B-production (production path, re-measured after commit `8562f48`)
 
-| Run | Before (bytes) | After (bytes) | Saved (bytes) | Reduction | matchCount | truncatedMatches |
-|---|---:|---:|---:|---:|---:|---:|
-| 1 | 19,781 | 19,781 | 0 | 0.0% | 0 | 0 |
-| 2 | 19,781 | 19,781 | 0 | 0.0% | 0 | 0 |
-| 3 | 19,781 | 19,781 | 0 | 0.0% | 0 | 0 |
-| Median | | | | 0.0% | 0 | 0 |
+Identical 400-line, 29,321-byte input in both variants; three runs each,
+all identical.
 
-The input is below the `headBytes + tailBytes + 256` threshold for this path, so
-no compaction is applied. This is the behavior the plugin ships today.
+**B-prod-pattern** — pattern supplied via `exec.arguments` (fixed behavior):
+
+| Run | Before (bytes) | After (bytes) | Saved (bytes) | Reduction | folded |
+|---|---:|---:|---:|---:|---|
+| 1 | 29,321 | 8,145 | 21,176 | 72.2% | true |
+| 2 | 29,321 | 8,145 | 21,176 | 72.2% | true |
+| 3 | 29,321 | 8,145 | 21,176 | 72.2% | true |
+| Median | | | | 72.2% | |
+
+**B-prod-nopattern** — no `arguments` passed (fail-open check; same code path
+as the pre-fix plugin behavior on this input):
+
+| Run | Before (bytes) | After (bytes) | Saved (bytes) | Reduction | folded |
+|---|---:|---:|---:|---:|---|
+| 1 | 29,321 | 12,321 | 17,000 | 58.0% | true |
+| 2 | 29,321 | 12,321 | 17,000 | 58.0% | true |
+| 3 | 29,321 | 12,321 | 17,000 | 58.0% | true |
+| Median | | | | 58.0% | |
+
+Comparison notes:
+
+- The earlier published B-production table (19,781 bytes, 0.0% reduction) used
+  a **different, below-threshold input**, where no compaction fires at all. Its
+  0.0% is an input-size artifact, not a code result; it must not be compared
+  directly with the numbers above.
+- On the same above-threshold input, pattern folding reduces output further
+  than fail-open truncation (8,145 vs 12,321 bytes). The difference in these
+  ratios (72.2% vs 58.0%) comes from input composition (match density,
+  line length), not from a general claim about any other workload.
 
 ### Scenario B-library (direct `foldGrepResult`, pattern supplied)
 
@@ -110,8 +148,11 @@ This measures the folding library capability when a pattern is available. It is
 - No task-quality, latency, or generalization claims are made. Byte reduction says
   nothing about whether the model still had the information it needed.
 - A ratio measured on one workload does not transfer to another.
-- In production today, grep-like tool output does not pass a search pattern to
-  `foldGrepResult`, so the B-library figure is not realized by default.
+- In production, grep-like tool output now extracts the search pattern from
+  `exec.arguments` (commit `8562f48`). The B-prod-pattern table above reflects
+  this fixed behavior. The B-prod-nopattern table is the fail-open check and
+  reproduces the pre-fix output on identical input. The B-library table remains
+  library capability only, not a default-behavior claim.
 
 ## Reproduction
 
