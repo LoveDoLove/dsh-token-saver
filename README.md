@@ -45,15 +45,15 @@ If your DSH installation asks for build-script approval, follow the approval ins
 
 > The GitHub repository and GitHub Releases are the source of truth for this project. Use a version-pinned release when one is available.
 
-Install the current v1.0.3 release explicitly:
+Install the current v1.0.4 release explicitly:
 
 ```bash
-dsh plugin --profile web add github:LoveDoLove/dsh-token-saver#v1.0.3
+dsh plugin --profile web add github:LoveDoLove/dsh-token-saver#v1.0.4
 ```
 
-The prebuilt artifact `dsh-token-saver-1.0.3.tgz` is also available from the [v1.0.3 release](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.3) and can be installed as a local package without a local build environment.
+The prebuilt artifact `dsh-token-saver-1.0.4.tgz` is also available from the [v1.0.4 release](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.4) and can be installed as a local package without a local build environment.
 
-> v1.0.3 includes the grep-pattern fix (commit `8562f48`). The v1.0.2 release predates it.
+> v1.0.4 includes the DSH contract-compatibility fixes and keeps the grep-pattern fix (commit `8562f48`) shipped in v1.0.3. The v1.0.2 release predates the grep-pattern fix.
 
 ## How it works
 
@@ -129,7 +129,7 @@ The same tool output can be compacted twice — once by the post-execute hook an
 
 ## Benchmark
 
-Verified byte-reduction measurements on plugin v1.0.3 (DSH 0.2.1-rc.2, Node v24.22.0, Linux, mode `conservative`, `rtkEnabled: false`). Every scenario is a deterministic in-process call on synthetic input — no DSH session and no LLM request are involved. Full methodology and reproducible commands are in [docs/benchmark-results.md](docs/benchmark-results.md); how to reproduce and report measurements is in [docs/benchmark-methodology.md](docs/benchmark-methodology.md).
+Verified byte-reduction measurements on plugin v1.0.4 (DSH 0.2.1-rc.2, Node v24.22.0, Linux, mode `conservative`, `rtkEnabled: false`). Every scenario is a deterministic in-process call on synthetic input — no DSH session and no LLM request are involved. Full methodology and reproducible commands are in [docs/benchmark-results.md](docs/benchmark-results.md); how to reproduce and report measurements is in [docs/benchmark-methodology.md](docs/benchmark-methodology.md).
 
 | Scenario | Input bytes | Output bytes | Bytes saved | Reduction |
 |---|---:|---:|---:|---:|

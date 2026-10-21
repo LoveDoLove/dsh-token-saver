@@ -8,7 +8,7 @@ results.
 
 ## Build and environment
 
-- Plugin version: 1.0.3
+- Plugin version: 1.0.4
 - Grep-folding fix commit: `8562f48234cf16b2261ccb3e63f6c5c233545b00`
   (`feat(tool-result-trim): read grep pattern from exec.arguments in production path`).
   Scenario A and C tables below were measured on the earlier doc commit
@@ -17,6 +17,11 @@ results.
 - The `src/` tree is unchanged since the measured commits except for the
   grep-folding fix, which touches only the grep path and therefore does not
   affect scenarios A and C.
+- Since `8562f48`, v1.0.4 changed only `src/index.ts`, `src/local-responses/*`,
+  and `src/prompt-shaping/*` (DSH contract-compatibility fixes). The measured
+  paths — `src/config.ts`, `src/strategies/`, `src/lib/`, `src/rtk/` — are
+  byte-identical, so the tables below still describe the v1.0.4 code path.
+  The reproducible rows were re-run on v1.0.4 and matched the recorded values.
 - DSH version: 0.2.1-rc.2
 - Node.js: v24.22.0
 - OS: Linux 6.18.33.2-microsoft-standard-WSL2 (WSL2)

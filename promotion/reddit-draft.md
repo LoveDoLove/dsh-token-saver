@@ -23,7 +23,7 @@ It runs three compaction paths:
 Everything is configurable and disabled or conservative by default where
 appropriate.
 
-### Measured (verified, in-process, conservative mode, v1.0.3)
+### Measured (verified, in-process, conservative mode, v1.0.4)
 
 | Scenario | Before | After | Saved |
 |---|---:|---:|---:|
