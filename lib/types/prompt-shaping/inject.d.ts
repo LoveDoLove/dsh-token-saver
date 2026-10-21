@@ -28,6 +28,13 @@ export declare function injectIntoSystemPrompt(currentSystem: string | undefined
     injected: boolean;
     reason: 'created' | 'appended' | 'already-injected' | 'empty-text';
 };
+/**
+ * Remove every injected prompt region from a plain string.
+ *
+ * Upstream (`dsh-our-free-model`) removes the marked region together with ONE
+ * adjacent separator, so removing a segment from the middle of a prompt does
+ * not leave a double blank line behind.
+ */
 export declare function stripPromptShaping(text: string): string;
 /**
  * Check if the payload already contains injected prompt shaping across supported wires.
@@ -35,6 +42,14 @@ export declare function stripPromptShaping(text: string): string;
 export declare function hasInjected(payload: unknown, wire?: string): boolean;
 /**
  * Universal system prompt injector across wire formats.
+ *
+ * Behaviour follows upstream `dsh-our-free-model`:
+ * - the Anthropic `messages` wire inserts the segment BEFORE the last
+ *   `cache_control` block, so the provider cache breakpoint stays last and the
+ *   whole system prompt remains cache-eligible;
+ * - the chat wire extends `messages[0]` when it is a system turn;
+ * - the Responses wire prefers `instructions`, and otherwise extends (or
+ *   creates) a system message inside `input`.
  */
 export declare function injectSystem(payload: unknown, wire: string | undefined, text: string): {
     payload: unknown;
@@ -43,6 +58,11 @@ export declare function injectSystem(payload: unknown, wire: string | undefined,
 };
 /**
  * Remove injected prompt segments from payload.
+ *
+ * Covers every shape `injectSystem` can write: Anthropic `system` (string or
+ * block array), chat `messages` (string or block content), and the Responses
+ * `instructions` string plus system messages inside `input`. Blocks and
+ * messages that become empty are removed, as upstream does.
  */
 export declare function stripInjected(payload: unknown, _wire?: string): {
     payload: unknown;

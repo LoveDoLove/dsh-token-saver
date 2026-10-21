@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   cavemanPrompt,
   ponytailPrompt,
@@ -13,6 +13,8 @@ import {
   DSH_MARKER_END,
   OFM_INJECT_MARKER,
   OFM_MARKER_END,
+  createAssembleInjector,
+  SHAPING_SECTION_NAME,
 } from '../src/prompt-shaping'
 
 describe('Prompt Shaping - Caveman & Ponytail', () => {
@@ -118,5 +120,71 @@ describe('Prompt Shaping - System Prompt Injection & Deduplication', () => {
     expect(stripped).not.toContain('OFM segment')
     expect(stripped).not.toContain(DSH_INJECT_MARKER)
     expect(stripped).not.toContain(OFM_INJECT_MARKER)
+  })
+})
+
+describe('Prompt Shaping - DSH system-prompt/assemble waterfall', () => {
+  function assemblyWith(text: string) {
+    return {
+      sections: [{ name: 'base', text }],
+      contexts: [],
+      variables: {},
+    }
+  }
+
+  it('adds a shaping section to the returned assembly', async () => {
+    const injector = createAssembleInjector(() => 'Caveman rules')
+    const next = vi.fn(async () => assemblyWith('Base system prompt.'))
+
+    const result = await injector(assemblyWith('Base system prompt.'), {}, next)
+
+    expect(next).toHaveBeenCalled()
+    expect(result.sections).toHaveLength(2)
+    const shaping = result.sections[1]!
+    expect(shaping.name).toBe(SHAPING_SECTION_NAME)
+    expect(shaping.text).toContain(DSH_INJECT_MARKER)
+    expect(shaping.text).toContain('Caveman rules')
+    // The shaping text is literal, never a DSH `{{variable}}` template.
+    expect(shaping.interpolate).toBe(false)
+  })
+
+  it('does not inject twice when the prompt already carries the marker', async () => {
+    const injector = createAssembleInjector(() => 'Caveman rules')
+    const existing = assemblyWith(`Base\n\n${wrapPromptSegment('Already there')}`)
+
+    const result = await injector(existing, {}, async () => existing)
+
+    expect(result.sections).toHaveLength(1)
+  })
+
+  it('leaves the assembly untouched when no prompt is active', async () => {
+    const injector = createAssembleInjector(() => '')
+    const base = assemblyWith('Base system prompt.')
+
+    const result = await injector(base, {}, async () => base)
+
+    expect(result.sections).toHaveLength(1)
+    expect(result.sections[0]!.text).toBe('Base system prompt.')
+  })
+
+  it('lets a downstream failure surface unchanged', async () => {
+    const injector = createAssembleInjector(() => 'Caveman rules')
+
+    await expect(
+      injector(assemblyWith('Base'), {}, async () => {
+        throw new Error('downstream boom')
+      }),
+    ).rejects.toThrow('downstream boom')
+  })
+
+  it('fails open when the prompt text cannot be resolved', async () => {
+    const injector = createAssembleInjector(() => {
+      throw new Error('config boom')
+    })
+    const base = assemblyWith('Base system prompt.')
+
+    const result = await injector(base, {}, async () => base)
+
+    expect(result.sections).toHaveLength(1)
   })
 })

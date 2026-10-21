@@ -9,15 +9,33 @@ import type { GenerateOptionsLike } from '../src/types'
 
 describe('Local Responses - 5 Types Detection & Generation', () => {
   it('detects and handles quota probes', () => {
+    // Upstream (dsh-our-free-model) gates the quota answer on a one-token
+    // budget plus the word "quota". DSH spells the budget `maxTokens`.
     const opts: GenerateOptionsLike = {
-      messages: [{ role: 'user', content: '99999' }],
+      maxTokens: 1,
+      messages: [{ role: 'user', content: 'quota' }],
     }
     const detected = detectLocalResponse(opts)
     expect(detected).not.toBeNull()
     expect(detected?.kind).toBe('quota')
-    expect(detected?.text).toBe('1')
-    expect(detected?.usage.input_tokens).toBe(1)
-    expect(detected?.usage.output_tokens).toBe(1)
+    expect(detected?.text).toBe('Quota check passed.')
+    expect(detected?.usage.input_tokens).toBe(10)
+    expect(detected?.usage.output_tokens).toBe(5)
+  })
+
+  it('does not intercept a bare integer message', () => {
+    // A lone integer is an ordinary user message, not a quota probe.
+    const opts: GenerateOptionsLike = {
+      messages: [{ role: 'user', content: '99999' }],
+    }
+    expect(detectLocalResponse(opts)).toBeNull()
+  })
+
+  it('does not intercept a quota question without a one-token budget', () => {
+    const opts: GenerateOptionsLike = {
+      messages: [{ role: 'user', content: 'how much quota is left?' }],
+    }
+    expect(detectLocalResponse(opts)).toBeNull()
   })
 
   it('detects and handles command prefix extraction', () => {
@@ -85,12 +103,13 @@ describe('Local Responses - 5 Types Detection & Generation', () => {
   })
 
   it('detects and handles filepath extraction', () => {
-    // Reading command (cat) extracts file paths
+    // Reading command (cat) extracts file paths. The trigger is the user
+    // naming "filepaths" (upstream also accepts "<filepaths>").
     const optsCat: GenerateOptionsLike = {
       messages: [
         {
           role: 'user',
-          content: 'Command: cat src/index.ts src/types.ts\nOutput: [file contents...]\nExtract any file paths.',
+          content: 'Command: cat src/index.ts src/types.ts\nOutput: [file contents...]\nExtract filepaths.',
         },
       ],
     }
@@ -100,6 +119,21 @@ describe('Local Responses - 5 Types Detection & Generation', () => {
     expect(detectedCat?.text).toContain('<filepaths>')
     expect(detectedCat?.text).toContain('src/index.ts')
     expect(detectedCat?.text).toContain('src/types.ts')
+
+    // The system prompt may ask for the paths instead of the user.
+    const optsSystem: GenerateOptionsLike = {
+      system: 'Extract any file paths that this command touched.',
+      messages: [
+        {
+          role: 'user',
+          content: 'Command: cat src/index.ts src/types.ts\nOutput: [file contents...]',
+        },
+      ],
+    }
+    const detectedSystem = detectLocalResponse(optsSystem)
+    expect(detectedSystem).not.toBeNull()
+    expect(detectedSystem?.kind).toBe('filepath')
+    expect(detectedSystem?.text).toContain('src/index.ts')
 
     // Listing command (ls) yields empty filepaths block
     const optsLs: GenerateOptionsLike = {
@@ -128,7 +162,8 @@ describe('Local Responses - 5 Types Detection & Generation', () => {
 describe('Local Responses - Independent Enablement & Streaming', () => {
   it('returns null if kind is disabled in config', () => {
     const opts: GenerateOptionsLike = {
-      messages: [{ role: 'user', content: '12345' }],
+      maxTokens: 1,
+      messages: [{ role: 'user', content: 'quota' }],
     }
     const detectedDisabled = detectLocalResponse(opts, { quota: false })
     expect(detectedDisabled).toBeNull()
@@ -140,8 +175,8 @@ describe('Local Responses - Independent Enablement & Streaming', () => {
   it('createLocalResponseStream emits proper stream chunks', async () => {
     const match = {
       kind: 'quota' as const,
-      text: '1',
-      usage: { input_tokens: 1, output_tokens: 1 },
+      text: 'Quota check passed.',
+      usage: { input_tokens: 10, output_tokens: 5 },
       model: 'test-model',
     }
     const chunks = []
@@ -151,13 +186,20 @@ describe('Local Responses - Independent Enablement & Streaming', () => {
 
     expect(chunks.length).toBe(5)
     expect(chunks[0]!.type).toBe('block-start')
+    expect(chunks[0]!.blockType).toBe('text')
     expect(chunks[1]!.type).toBe('text-delta')
-    expect(chunks[1]!.delta).toBe('1')
+    expect(chunks[1]!.text).toBe('Quota check passed.')
     expect(chunks[2]!.type).toBe('block-end')
+    expect(chunks[2]!.block?.text).toBe('Quota check passed.')
+    // No upstream model was called: the reported usage is the REAL
+    // consumption of the turn, which is zero. The simulated saving is
+    // reported through the telemetry event, not through the usage chunk.
     expect(chunks[3]!.type).toBe('usage')
-    expect(chunks[3]!.usage?.input).toBe(1)
-    expect(chunks[3]!.usage?.output).toBe(1)
+    expect(chunks[3]!.usage?.inputTokens).toBe(0)
+    expect(chunks[3]!.usage?.outputTokens).toBe(0)
+    expect(chunks[3]!.usage?.totalTokens).toBe(0)
     expect(chunks[4]!.type).toBe('finish')
-    expect(chunks[4]!.reason).toBe('stop')
+    // `finish.reason` is a FinishReason OBJECT in the DSH contract.
+    expect(chunks[4]!.reason).toEqual({ kind: 'stop' })
   })
 })

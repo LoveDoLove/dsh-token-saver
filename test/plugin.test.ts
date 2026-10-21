@@ -135,7 +135,8 @@ describe('plugin global hooks execution', () => {
     expect(streamListener).toBeDefined()
 
     const quotaOpts: GenerateOptionsLike = {
-      messages: [{ role: 'user', content: '12345' }],
+      maxTokens: 1,
+      messages: [{ role: 'user', content: 'quota' }],
     }
     async function* dummyNext() {
       yield { type: 'finish', reason: 'stop' } as StreamChunkLike
@@ -149,7 +150,13 @@ describe('plugin global hooks execution', () => {
     }
 
     expect(nextMock).not.toHaveBeenCalled()
-    expect(chunks.some(c => c.type === 'text-delta' && c.delta === '1')).toBe(true)
+    expect(chunks.some(c => c.type === 'text-delta' && c.text === 'Quota check passed.')).toBe(true)
+    // The upstream model is never called: the usage chunk reports the REAL
+    // consumption of the turn, which is zero.
+    const usage = chunks.find(c => c.type === 'usage') as { usage?: Record<string, number> } | undefined
+    expect(usage?.usage?.inputTokens).toBe(0)
+    expect(usage?.usage?.outputTokens).toBe(0)
+    expect(usage?.usage?.totalTokens).toBe(0)
   })
 
   it('bypasses llm/stream to next() when localResponses is disabled', async () => {

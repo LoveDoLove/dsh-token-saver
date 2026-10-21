@@ -123,28 +123,15 @@ export function quotaAnswer(request: RequestLike | undefined): LocalAnswer | nul
   const maxTokens = request?.maxTokens ?? request?.max_tokens
   const hasMax1 = maxTokens === 1 || maxTokens === '1'
 
-  // Standard quota probe (max_tokens: 1 and text containing 'quota')
+  // Quota probe: a lone user turn that asks about quota, sent with a
+  // one-token budget. Upstream dsh-our-free-model gates the same answer on
+  // `max_tokens === 1` plus the word "quota"; DSH spells the budget
+  // `maxTokens`, so both spellings are accepted.
+  //
+  // A bare integer message is NOT a quota probe. It is an ordinary user
+  // message, and answering it locally would swallow a real request without
+  // ever reaching the model.
   if (hasMax1 && text.includes('quota')) {
-    return {
-      kind: 'quota',
-      text: 'Quota check passed.',
-      usage: makeUsage(10, 5),
-      model: request?.model,
-    }
-  }
-
-  // Integer probe (lone integer token probe)
-  if (/^\d+$/.test(text)) {
-    return {
-      kind: 'quota',
-      text: '1',
-      usage: makeUsage(1, 1),
-      model: request?.model,
-    }
-  }
-
-  // Fallback quota check
-  if (text.includes('quota') && (hasMax1 || (request as Record<string, unknown>)?.purpose === 'quota')) {
     return {
       kind: 'quota',
       text: 'Quota check passed.',
@@ -222,17 +209,13 @@ export function filepathAnswer(request: RequestLike | undefined): LocalAnswer | 
   if (!content.includes('Command:') || !content.includes('Output:')) return null
 
   const lower = content.toLowerCase()
-  const userNamesFilepaths =
-    lower.includes('filepaths') ||
-    lower.includes('<filepaths>') ||
-    lower.includes('file paths') ||
-    lower.includes('filepath')
+  // Upstream only accepts the two explicit phrasings. The looser
+  // "file paths" / "filepath" substrings matched ordinary requests (any
+  // message mentioning a file path) and answered them locally.
+  const userNamesFilepaths = lower.includes('filepaths')
   const system = systemText(request).toLowerCase()
   const systemAsksForPaths =
-    system.includes('extract any file paths') ||
-    system.includes('file paths that this command') ||
-    system.includes('filepaths') ||
-    system.includes('file paths')
+    system.includes('extract any file paths') || system.includes('file paths that this command')
   if (!userNamesFilepaths && !systemAsksForPaths) return null
 
   const start = content.indexOf('Command:') + 'Command:'.length
