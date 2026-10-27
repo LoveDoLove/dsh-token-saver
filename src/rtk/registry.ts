@@ -16,6 +16,7 @@ import { smartTruncate } from './filters/smartTruncate.js'
 import { readNumbered } from './filters/readNumbered.js'
 import { searchList } from './filters/searchList.js'
 import { buildOutput } from './filters/buildOutput.js'
+import { table } from './filters/table.js'
 
 export const REGISTRY = new Map<string, RtkFilterFn>([
   ['git-diff', gitDiff],
@@ -30,6 +31,7 @@ export const REGISTRY = new Map<string, RtkFilterFn>([
   ['read-numbered', readNumbered],
   ['search-list', searchList],
   ['build-output', buildOutput],
+  ['table', table],
 ])
 
 export const ALIASES = new Map<string, string>([

@@ -16,6 +16,7 @@ import { smartTruncate } from './filters/smartTruncate.js'
 import { readNumbered, isNumberedOutput } from './filters/readNumbered.js'
 import { searchList } from './filters/searchList.js'
 import { buildOutput } from './filters/buildOutput.js'
+import { table } from './filters/table.js'
 
 export function isMostlyPorcelain(sampleLines: readonly string[]): boolean {
   if (sampleLines.length < 3) return false
@@ -28,6 +29,25 @@ export function isMostlyPorcelain(sampleLines: readonly string[]): boolean {
   return porcelainCount / sampleLines.length >= 0.5
 }
 
+const TABLE_HEADER =
+  /^\s*(CONTAINER|POD|NAME|USER|PID|COMMAND|STATUS|IMAGE|UPTIME|CPU|MEM|SIZE|TOTAL|ALLOCATION|VERSION|Filesystem|Mount|STATE|ADDRESS|LISTENING|PR|PKG|NODE)\b/i
+
+/**
+ * Columnar CLI output: a keyword header line followed by multi-field rows.
+ * Kept intentionally conservative; on any doubt the filter must not fire.
+ */
+export function isTableOutput(sampleLines: readonly string[]): boolean {
+  if (sampleLines.length < 5) return false
+  if (!TABLE_HEADER.test(sampleLines[0]!)) return false
+  const data = sampleLines.slice(1)
+  if (data.length < 3) return false
+  let multiField = 0
+  for (const l of data.slice(0, 10)) {
+    if (l.trim().split(/\s+/).length >= 2) multiField++
+  }
+  return multiField >= 2
+}
+
 export function autoDetectFilter(text: string): RtkFilterFn | null {
   const window = text.slice(0, DETECT_WINDOW)
   const lines = window.split('\n').filter((l) => l.trim().length > 0)
@@ -38,6 +58,7 @@ export function autoDetectFilter(text: string): RtkFilterFn | null {
     text.includes('[full diff: rtk') ||
     text.includes('to save tokens; head and tail preserved') ||
     text.includes('[repeated ')
+    || text.includes(' rows omitted')
   ) {
     return null
   }
@@ -66,6 +87,13 @@ export function autoDetectFilter(text: string): RtkFilterFn | null {
     /\bCompiling\s+\S+\s+v\d+/i.test(window)
   ) {
     return buildOutput
+  }
+
+  // 4.5. table-like CLI output (docker ps, kubectl get, ps aux, df -h, ls -l).
+  // Checked before the porcelain rule: data rows of tables ('abcdef1234 nginx ...')
+  // otherwise satisfy the porcelain shape test and get mangled by gitStatus.
+  if (isTableOutput(lines)) {
+    return table
   }
 
   // 5. porcelain git status

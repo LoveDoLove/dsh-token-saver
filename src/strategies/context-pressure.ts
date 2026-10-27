@@ -54,6 +54,11 @@ export async function decidePreStep(
   if (pressure < cfg.pressureThreshold) {
     return nextDecision
   }
+  if (pressure < cfg.compactPressureThreshold) {
+    // Two-stage thresholds: pressureThreshold opens the compaction window,
+    // compactPressureThreshold defers the actual compact call.
+    return nextDecision
+  }
   const agent = options.agentForSession?.(sessionId) as Parameters<CompactionEngineLike['compactIfNeeded']>[0] | undefined
   const engine = options.getCompactionEngine?.()
   if (!agent || !engine) {

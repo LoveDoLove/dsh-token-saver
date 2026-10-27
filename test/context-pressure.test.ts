@@ -86,4 +86,26 @@ describe('decidePreStep', () => {
     }, next)
     expect(out.kind).toBe('reject')
   })
+
+  it('defers compaction between pressureThreshold and compactPressureThreshold', async () => {
+    const cfg = resolveConfig({ mode: 'balanced', pressureThreshold: 0.4, compactPressureThreshold: 0.8 })
+    let meter: TokenMeterLike = { current: 60000, capacity: 100000, pressure: 0.6 }
+    const agent: AgentLike = { session: { id: 'sess-1' } }
+    let compactCalls = 0
+    const engine: CompactionEngineLike = {
+      compactIfNeeded: async () => {
+        compactCalls++
+        return null
+      },
+      compactNow: async () => null,
+      compactRegion: async () => ({}),
+    }
+    const next = async () => enterDecision()
+    await decidePreStep(basePayload(), { config: cfg, getTokenMeter: () => meter, getCompactionEngine: () => engine, agentForSession: () => agent }, next)
+    expect(compactCalls).toBe(0)
+
+    meter = { current: 90000, capacity: 100000, pressure: 0.9 }
+    await decidePreStep(basePayload(), { config: cfg, getTokenMeter: () => meter, getCompactionEngine: () => engine, agentForSession: () => agent }, next)
+    expect(compactCalls).toBe(1)
+  })
 })

@@ -14,6 +14,7 @@ import {
   tree,
   dedupLog,
   buildOutput,
+  table,
   mergeRtkStats,
   compressMessages,
 } from '../src/rtk'
@@ -149,6 +150,35 @@ describe('RTK Filters', () => {
     expect(compacted).toContain('errors (1):')
     expect(compacted).toContain('warnings (1):')
     expect(compacted).toContain('summary:')
+  })
+
+  it('table compacts large table-like CLI output keeping head and tail rows', () => {
+    const lines = ['CONTAINER ID IMAGE COMMAND STATUS PORTS NAMES']
+    for (let i = 0; i < 40; i++) {
+      lines.push(`a${i} nginx:latest "sh" "Up 2h" 80/tcp web${i}`)
+    }
+    const raw = lines.join('\n')
+    const out = table(raw)
+    expect(out).toContain('CONTAINER ID')
+    expect(out).toContain('web1')
+    expect(out).toContain('web38')
+    expect(out).toContain('rows omitted')
+    expect(out.length).toBeLessThan(raw.length)
+    const small = ['CONTAINER ID IMAGE', 'a1 nginx:latest "sh"'].join('\n')
+    expect(table(small)).toBe(small)
+  })
+
+  it('autoDetectFilter routes docker-ps-like table output to the table filter', () => {
+    const dockerPs = [
+      'CONTAINER ID IMAGE COMMAND CREATED STATUS PORTS NAMES',
+      'a3f9b2c1d4e5 nginx:latest "sh -c nginx" 2 hours ago Up 2 hours 80/tcp web1',
+      'b4a9b2c1d4e5 redis:7 "redis-server" 2 hours ago Up 2 hours 6379/tcp cache1',
+      'c5a9b2c1d4e5 node:22 "npm start" 2 hours ago Up 2 hours 3000/tcp api1',
+      'd6a9b2c1d4e5 postgres:16 "postgres" 2 hours ago Up 2 hours 5432/tcp db1',
+      'e7a9b2c1d4e5 node:22 "npm start" 2 hours ago Up 2 hours 3001/tcp api2',
+    ].join('\n')
+    const filter = autoDetectFilter(dockerPs)
+    expect(filter?.filterName).toBe('table')
   })
 })
 
