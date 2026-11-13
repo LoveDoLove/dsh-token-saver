@@ -53,12 +53,25 @@ dsh plugin --profile web add github:LoveDoLove/dsh-token-saver#v1.0.5
 
 The prebuilt artifact `dsh-token-saver-1.0.5.tgz` is also available from the [v1.0.5 release](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.5) and can be installed as a local package without a local build environment.
 
-> v1.0.5 adds the `rtk/filters/table` compaction filter and the two-stage
+> **v1.0.5 fixes a data-destruction bug, and you should upgrade if you read
+> files through a tool.** RTK autodetection inspected only the first bytes of a
+> tool result, and README-style prose (a `## ` heading) matched the `git status`
+> heuristic, so the filter collapsed the payload to a couple of lines. On this
+> repository's own README.md that turned 11,245 bytes into 1,691 — 85% of the
+> content silently discarded. Read-like tools (`read`, `cat`, `view`, `fetch`,
+> `curl`, …) no longer take an implicit autodetect pass; an explicit filter still
+> applies. Also in v1.0.5: the `!!` git-status entries are no longer
+> double-counted as both staged and modified, grep folding hoists its RegExp out
+> of the per-line loop (removing a ReDoS), and the result object reports which
+> strategy produced a trim.
+>
+> v1.0.5 also adds the `rtk/filters/table` compaction filter and the two-stage
 > `compactPressureThreshold` gate, and stops committing build output to the
 > repository. Build artifacts are now produced at install time by a `prepare`
 > script, so a git-URL install needs approval to run that script (see the
 > build-script note above). Prefer the `.tgz` artifact if you install in an
 > environment where install scripts cannot run.
+>
 > v1.0.5 keeps the DSH contract-compatibility fixes and the grep-pattern fix
 > (commit `8562f48`) shipped in v1.0.3/v1.0.4. The v1.0.2 release predates the
 > grep-pattern fix.

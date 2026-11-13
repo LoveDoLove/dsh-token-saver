@@ -53,7 +53,16 @@ dsh plugin --profile web add github:LoveDoLove/dsh-token-saver#v1.0.5
 
 预构建产物 `dsh-token-saver-1.0.5.tgz` 也可从 [v1.0.5 版本发布页](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.5) 下载，作为本地包安装，无需本地构建环境。
 
-> v1.0.5 新增 `rtk/filters/table` 表格压缩过滤器与两段式 `compactPressureThreshold` 闸门，并停止将构建产物提交进仓库。构建产物改由 `prepare` 脚本在安装时生成，因此通过 git URL 安装需要授权执行该脚本（见上方的构建脚本提示）。若安装环境无法执行安装脚本，请改用 `.tgz` 产物。
+> **v1.0.5 修复了一个会销毁数据的缺陷，若你会通过工具读取文件，建议升级。**
+> RTK 自动探测只检查工具结果开头的若干字节，而 README 风格的正文（`## ` 标题）
+> 会命中 `git status` 的启发式判断，于是过滤器把整段内容压缩成两三行。以本仓库自己的
+> README.md 为例，11,245 字节被压成 1,691 字节，**85% 的内容被静默丢弃**。
+> 现在读类工具（`read`、`cat`、`view`、`fetch`、`curl` 等）不再走隐式自动探测，
+> 仅显式指定的过滤器仍然生效。v1.0.5 还修复了 `git status` 的 `!!` 条目被同时计入
+> staged 与 modified、把 grep 折叠的正则提取到逐行循环之外（消除 ReDoS），
+> 并在结果对象中标注实际生效的裁剪策略。
+>
+> v1.0.5 同时新增 `rtk/filters/table` 表格压缩过滤器与两段式 `compactPressureThreshold` 闸门，并停止将构建产物提交进仓库。构建产物改由 `prepare` 脚本在安装时生成，因此通过 git URL 安装需要授权执行该脚本（见上方的构建脚本提示）。若安装环境无法执行安装脚本，请改用 `.tgz` 产物。
 > v1.0.5 保留 v1.0.4/v1.0.3 的 DSH 合约兼容性修复与 grep 模式修复（commit `8562f48`）；v1.0.2 正式版早于该 grep 修复。
 
 ## 工作方式
