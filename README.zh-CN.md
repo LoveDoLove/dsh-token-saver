@@ -45,15 +45,16 @@ dsh plugin --profile web add github:LoveDoLove/dsh-token-saver
 
 > 本项目以 GitHub 仓库和 GitHub Releases 为准；有固定版本的正式发行版时，建议安装指定版本。
 
-安装当前指定的 v1.0.4 正式版本：
+安装当前指定的 v1.0.5 正式版本：
 
 ```bash
-dsh plugin --profile web add github:LoveDoLove/dsh-token-saver#v1.0.4
+dsh plugin --profile web add github:LoveDoLove/dsh-token-saver#v1.0.5
 ```
 
-预构建产物 `dsh-token-saver-1.0.4.tgz` 也可从 [v1.0.4 版本发布页](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.4) 下载，作为本地包安装，无需本地构建环境。
+预构建产物 `dsh-token-saver-1.0.5.tgz` 也可从 [v1.0.5 版本发布页](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.5) 下载，作为本地包安装，无需本地构建环境。
 
-> v1.0.4 包含 DSH 合约兼容性修复，并保留 v1.0.3 引入的 grep 模式修复（commit `8562f48`）；v1.0.2 正式版早于该 grep 修复。
+> v1.0.5 新增 `rtk/filters/table` 表格压缩过滤器与两段式 `compactPressureThreshold` 闸门，并停止将构建产物提交进仓库。构建产物改由 `prepare` 脚本在安装时生成，因此通过 git URL 安装需要授权执行该脚本（见上方的构建脚本提示）。若安装环境无法执行安装脚本，请改用 `.tgz` 产物。
+> v1.0.5 保留 v1.0.4/v1.0.3 的 DSH 合约兼容性修复与 grep 模式修复（commit `8562f48`）；v1.0.2 正式版早于该 grep 修复。
 
 ## 工作方式
 
@@ -128,7 +129,7 @@ Web 设置面板显示实时节省遥测数据，累计统计结果会持久化�
 
 ## 基准测试
 
-已验证的字节减少测量结果（插件 v1.0.4，DSH 0.2.1-rc.2，Node v24.22.0，Linux，模式 `conservative`，`rtkEnabled: false`）。每个场景都是对合成输入的确定性进程内调用，不涉及 DSH 会话或 LLM 请求。完整测试方法与可复现命令见 [docs/benchmark-results.md](docs/benchmark-results.md)，如何复现和报告测量结果见 [docs/benchmark-methodology.md](docs/benchmark-methodology.md)。
+已验证的字节减少测量结果（插件 v1.0.5，DSH 0.2.1-rc.2，Node v24.22.3，Linux，模式 `conservative`，`rtkEnabled: false`）。每个场景都是对合成输入的确定性进程内调用，不涉及 DSH 会话或 LLM 请求。完整测试方法与可复现命令见 [docs/benchmark-results.md](docs/benchmark-results.md)，如何复现和报告测量结果见 [docs/benchmark-methodology.md](docs/benchmark-methodology.md)。
 
 | 场景 | 输入字节 | 输出字节 | 节省字节 | 减少比例 |
 |---|---:|---:|---:|---:|
