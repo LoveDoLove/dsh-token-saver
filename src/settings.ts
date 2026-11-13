@@ -70,6 +70,12 @@ export interface TotalSavings {
   saved: number
   calls: number
   blocks: number
+  /**
+   * Count of model steps whose system prompt actually carried a shaping
+   * prompt. Kept apart from `calls`, which counts byte-producing
+   * compactions: injecting a prompt saves no bytes at the point it happens.
+   */
+  promptCalls: number
 }
 
 export interface RuntimeState {
@@ -104,7 +110,10 @@ export function getLiveSavings(rtkStats?: RtkStats, totals?: TotalSavings): Publ
   // fallback mirrors hits.
   const blocks = totals ? Math.max(0, totals.blocks) : (rtkStats?.hits?.length ?? 0)
   const calls = totals ? Math.max(0, totals.calls) : (rtkStats?.hits?.length ?? 0)
-  const promptCalls = 0
+  // Persisted totals are the only source for prompt injections: the
+  // accumulator has no prompt signal at all. Absent the store there is
+  // nothing to report, which is 0 rather than a lie.
+  const promptCalls = totals ? Math.max(0, totals.promptCalls) : 0
   const summary = calls > 0
     ? `${calls} calls · ${percent}% (${(saved / 1024).toFixed(1)} KB) saved`
     : ''

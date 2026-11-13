@@ -188,17 +188,25 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
   // effect on the next model step without reloading the plugin.
   scope.on(
     'system-prompt/assemble',
-    createAssembleInjector(() => {
-      if (!runtimeState.enabled) return ''
-      const cfg = runtimeState.config
-      if (cfg.cavemanLevel === 'off' && cfg.ponytailLevel === 'off') return ''
-      return activePrompts({
-        caveman: cfg.cavemanLevel,
-        ponytail: cfg.ponytailLevel,
-      })
-        .map((p) => p.text)
-        .join('\n\n')
-    }) as never,
+    createAssembleInjector(
+      () => {
+        if (!runtimeState.enabled) return ''
+        const cfg = runtimeState.config
+        if (cfg.cavemanLevel === 'off' && cfg.ponytailLevel === 'off') return ''
+        return activePrompts({
+          caveman: cfg.cavemanLevel,
+          ponytail: cfg.ponytailLevel,
+        })
+          .map((p) => p.text)
+          .join('\n\n')
+      },
+      // A shaped prompt saves no bytes at the moment it is injected, so it has
+      // its own counter: `promptCalls` is the only place a prompt-only step
+      // shows up in the dashboard.
+      () => {
+        statsStore.record(null, true)
+      },
+    ) as never,
   )
 
   // 3) Global LLM Stream hook: Local responses & Prompt shaping

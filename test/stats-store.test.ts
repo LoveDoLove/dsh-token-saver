@@ -38,8 +38,7 @@ describe('StatsStore', () => {
     expect(fs.existsSync(statsFile)).toBe(false)
   })
 
-  it('separates calls from blocks across several invocations', () => {
-    const store = new StatsStore(statsFile)
+  it('separates calls from blocks across several invocations', () => {    const store = new StatsStore(statsFile)
     store.record(makeStats([[1000, 200], [500, 100], [300, 300]]))
     store.record(makeStats([[400, 100]]))
 
@@ -64,6 +63,24 @@ describe('StatsStore', () => {
     expect(store.get().calls).toBe(1)
     expect(store.get().blocks).toBe(1)
     expect(fs.readFileSync(statsFile, 'utf8')).toBe(before)
+  })
+
+  it('counts a prompt injection that compressed no bytes', () => {
+    const store = new StatsStore(statsFile)
+
+    // A shaped prompt saves nothing at the step it is injected, so it must not
+    // be recorded as a compression call — only as a prompt call.
+    store.record(null, true)
+    store.record(createRtkStats(), true)
+
+    expect(store.get().promptCalls).toBe(2)
+    expect(store.get().calls).toBe(0)
+    expect(store.get().blocks).toBe(0)
+
+    // And it survives a restart, which is where the dashboard reads it from.
+    const reloaded = new StatsStore(statsFile)
+    expect(reloaded.get().promptCalls).toBe(2)
+    expect(getLiveSavings(undefined, reloaded.get()).promptCalls).toBe(2)
   })
 
   it('restores the totals after a simulated restart', () => {
@@ -93,6 +110,7 @@ describe('StatsStore', () => {
       saved: 0,
       calls: 2,
       blocks: 0,
+      promptCalls: 0,
     })
   })
 
@@ -113,7 +131,14 @@ describe('StatsStore', () => {
 describe('getLiveSavings with persisted totals', () => {
   it('prefers persisted totals over the live accumulator', () => {
     const live = makeStats([[1000, 200]])
-    const savings = getLiveSavings(live, { bytesBefore: 2000, bytesAfter: 500, saved: 1500, calls: 3, blocks: 4 })
+    const savings = getLiveSavings(live, {
+      bytesBefore: 2000,
+      bytesAfter: 500,
+      saved: 1500,
+      calls: 3,
+      blocks: 4,
+      promptCalls: 2,
+    })
 
     expect(savings.bytesBefore).toBe(2000)
     expect(savings.bytesAfter).toBe(500)
@@ -121,7 +146,7 @@ describe('getLiveSavings with persisted totals', () => {
     expect(savings.percent).toBe(75)
     expect(savings.calls).toBe(3)
     expect(savings.blocks).toBe(4)
-    expect(savings.promptCalls).toBe(0)
+    expect(savings.promptCalls).toBe(2)
     expect(savings.summary).toContain('75%')
     expect(savings.summary).toContain('3 calls')
   })

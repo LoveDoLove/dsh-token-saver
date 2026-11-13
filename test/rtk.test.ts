@@ -20,6 +20,7 @@ import {
 } from '../src/rtk'
 import { decidePostTool } from '../src/strategies/tool-result-trim'
 import { resolveConfig } from '../src/config'
+import { RTK_DIFF_MARKER } from '../src/rtk/constants'
 
 describe('RTK Filters', () => {
   it('gitDiff compacts multi-hunk diffs and reports truncated lines', () => {
@@ -201,6 +202,22 @@ describe('RTK Engine Autodetection & Invariants', () => {
     expect(filter?.filterName).toBe('git-status')
   })
 
+  it('does not classify indented text as porcelain status', () => {
+    // Regression: the XY test admitted a bare space, so every line indented by
+    // four or more spaces (`'  '` at columns 0-1, `' '` at column 2) read as a
+    // porcelain entry — indented code, quoted mail and nested YAML were all
+    // crushed by gitStatus.
+    const indented = Array.from({ length: 60 }, (_, i) => `    const value${i} = compute(${i})`).join('\n')
+    const filter = autoDetectFilter(indented)
+    expect(filter?.filterName).not.toBe('git-status')
+
+    // Real porcelain still carries at least one status letter per listed
+    // entry. No `## ` header here, so this reaches the porcelain path itself
+    // rather than short-circuiting on the branch-header rule above it.
+    const real = 'M  a.ts\nMM b.ts\n D c.ts\n?? d.ts\nA  e.ts'
+    expect(autoDetectFilter(real)?.filterName).toBe('git-status')
+  })
+
   it('resolves aliases correctly (rg -> grep, fd -> find)', () => {
     expect(resolveFilter('rg')?.filterName).toBe('grep')
     expect(resolveFilter('ripgrep')?.filterName).toBe('grep')
@@ -258,6 +275,51 @@ describe('RTK Engine Autodetection & Invariants', () => {
     expect(outText).toContain('foo.ts')
   })
 
+  it('does not fold Markdown read by a read-like tool (B1 regression)', () => {
+    // Regression: autodetection sampled the first 1024 bytes and treated any
+    // `## ` heading as a git-status branch header, so `read`ing a README
+    // replaced the whole file with "branch: X / Clean working tree" and still
+    // recorded the destruction as bytes saved. Read-like tool output is an
+    // arbitrary file body, so only an explicit filter may touch it.
+    const cfg = resolveConfig({
+      mode: 'aggressive',
+      rtkEnabled: true,
+      headBytes: 50,
+      tailBytes: 50,
+    })
+    const readme = [
+      '# Project',
+      '',
+      '## Contributing',
+      '',
+      'All contributions are welcome; please open an issue first.',
+      '',
+      '## Setup',
+      '',
+      'Install the dependencies, then run the build before testing.',
+      '',
+      '## License',
+      '',
+      'MIT',
+    ].join('\n')
+    expect(readme.length).toBeGreaterThan(100)
+    // Sanity: the detector alone would still misfire on this text.
+    expect(autoDetectFilter(readme)?.filterName).toBe('git-status')
+
+    const res = decidePostTool(
+      {
+        exec: { id: 'call_1', tool: { name: 'read' } },
+        result: { content: [{ type: 'text', text: readme }] },
+      },
+      { config: cfg },
+    )
+
+    const outText = res.decision.content?.[0]?.text ?? ''
+    expect(outText).toContain('## Contributing')
+    expect(outText).not.toContain('Clean working tree')
+    expect(res.folded).toBe(false)
+  })
+
   it('preserves error tool results verbatim without RTK compaction', () => {
     const cfg = resolveConfig({
       mode: 'aggressive',
@@ -304,6 +366,38 @@ describe('llm/stream stream stats merge', () => {
     const msg = (body as { messages: { role: string; content: string }[] }).messages[1]!
     expect(msg?.content).toContain('0123456')
     expect(msg?.content.length).toBeLessThan(6100)
+  })
+
+  it('does not re-compact already-compacted diff output (F2 cascade)', () => {
+    // Regression: gitDiff stamped its marker only when it truncated a hunk, so
+    // a lossless restructure left no trace of the first pass. The second pass
+    // (llm/stream over the whole payload) then re-detected the header-less
+    // hunks as generic text and truncated the wreckage again.
+    const lines: string[] = []
+    for (let i = 0; i < 900; i++) {
+      lines.push(
+        `diff --git a/f${i}.ts b/f${i}.ts`,
+        `--- a/f${i}.ts`,
+        `+++ b/f${i}.ts`,
+        '@@ -1,3 +1,4 @@',
+        `+ export const v${i} = ${i}`,
+        ' x',
+      )
+    }
+    const raw = lines.join('\n')
+
+    const first = compressText(raw, createRtkStats())
+    expect(first.compressed).toBe(true)
+    expect(first.filterUsed).toBe('git-diff')
+    // The compaction must be recognisable as such.
+    expect(first.text).toContain(RTK_DIFF_MARKER)
+
+    const body = { messages: [{ role: 'tool', content: first.text }] }
+    const stats = compressMessages(body, { enabled: true })
+    expect(stats?.hits.length ?? 0).toBe(0)
+    expect(body.messages[0]!.content).toBe(first.text)
+    // The bulk of the diff survives to the model.
+    expect(Buffer.byteLength(body.messages[0]!.content)).toBeGreaterThan(first.text.length / 2)
   })
 
   it('merging stream stats into shared stats advances savings exactly once', () => {

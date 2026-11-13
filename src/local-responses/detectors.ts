@@ -116,6 +116,116 @@ export function hasTools(request: RequestLike | undefined): boolean {
   return Array.isArray(request?.tools) && request.tools.length > 0
 }
 
+/**
+ * Pull the first human-authored string out of an arbitrary nested payload
+ * (the title provider ships a JSON array of message objects; other callers
+ * ship a plain string). Returns undefined when nothing usable is present.
+ */
+function firstHumanText(value: unknown, depth = 0): string | undefined {
+  if (depth > 4) return undefined
+  if (typeof value === 'string') return value.trim().length > 0 ? value : undefined
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (item && typeof item === 'object' && !Array.isArray(item)) {
+        const role = (item as Record<string, unknown>).role
+        if (typeof role === 'string' && role !== 'user' && role !== 'human') continue
+        const nested = (item as Record<string, unknown>).content ?? (item as Record<string, unknown>).text
+        const found = firstHumanText(nested, depth + 1)
+        if (found !== undefined) return found
+        continue
+      }
+      const found = firstHumanText(item, depth + 1)
+      if (found !== undefined) return found
+    }
+    return undefined
+  }
+  if (value && typeof value === 'object') {
+    const rec = value as Record<string, unknown>
+    if (typeof rec.text === 'string') return firstHumanText(rec.text, depth + 1)
+    if (rec.content !== undefined) return firstHumanText(rec.content, depth + 1)
+  }
+  return undefined
+}
+
+const TITLE_MAX_CHARS = 60
+
+/** Reduce arbitrary message text to one short, clean title line. */
+function titleize(text: string): string | undefined {
+  const line = text
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l.length > 0)
+  if (line === undefined) return undefined
+  const cleaned = line
+    .replace(/^[#>*\-\s]+/, '')
+    .replace(/[*_`]/g, '')
+    .trim()
+  if (cleaned.length === 0) return undefined
+  if (cleaned.length <= TITLE_MAX_CHARS) return cleaned
+  const cut = cleaned.slice(0, TITLE_MAX_CHARS)
+  const space = cut.lastIndexOf(' ')
+  return (space > TITLE_MAX_CHARS / 2 ? cut.slice(0, space) : cut).trim()
+}
+
+/**
+ * Derive a title from the request's own content.
+ *
+ * The DSH title provider wraps its input as
+ * `Generate the session title from this JSON array of human messages:\n[...]`
+ * (dsh-session-title-first-prompt-llm). Returns undefined rather than a
+ * placeholder when nothing usable is found: a constant title is worse than
+ * letting the real request through.
+ */
+function deriveTitle(request: RequestLike | undefined): string | undefined {
+  const raw = firstHumanText(request?.messages)
+  if (raw === undefined) return undefined
+  const marker = raw.indexOf('JSON array of human messages')
+  if (marker !== -1) {
+    const colon = raw.indexOf(':', marker)
+    if (colon === -1) return undefined
+    try {
+      return titleize(String(firstHumanText(JSON.parse(raw.slice(colon + 1).trim())) ?? ''))
+    } catch {
+      // Unparseable envelope: do not guess from the instruction text itself.
+      return undefined
+    }
+  }
+  return titleize(raw)
+}
+
+export function titleAnswer(request: RequestLike | undefined): LocalAnswer | null {
+  if (hasTools(request)) return null
+
+  // Native DSH purpose check. The real title request carries
+  // purpose: 'session-title' and no tools, so this branch always fires when
+  // local responses are on — it must produce a real title, never a constant.
+  const isTitleRequest =
+    request?.purpose === 'session-title' || isHeuristicTitleRequest(request)
+  if (!isTitleRequest) return null
+
+  const text = deriveTitle(request)
+  if (text === undefined) return null
+
+  return {
+    kind: 'title',
+    text,
+    usage: makeUsage(100, 5),
+    model: request?.model,
+  }
+}
+
+/** System-prompt shape check for title requests that carry no `purpose`. */
+function isHeuristicTitleRequest(request: RequestLike | undefined): boolean {
+  const system = systemText(request).toLowerCase()
+  if (!system.includes('title')) return false
+  const sentenceCase = system.includes('sentence-case title')
+  const jsonField =
+    system.includes('return json') &&
+    system.includes('field') &&
+    (system.includes('coding session') || system.includes('this session'))
+  return sentenceCase || jsonField
+}
+
 export function quotaAnswer(request: RequestLike | undefined): LocalAnswer | null {
   const message = singleUserTurn(request)
   if (message === undefined) return null
@@ -152,36 +262,6 @@ export function prefixAnswer(request: RequestLike | undefined): LocalAnswer | nu
   return {
     kind: 'prefix',
     text: extractCommandPrefix(content.slice(start).trim()),
-    usage: makeUsage(100, 5),
-    model: request?.model,
-  }
-}
-
-export function titleAnswer(request: RequestLike | undefined): LocalAnswer | null {
-  if (hasTools(request)) return null
-
-  // Native DSH purpose check
-  if (request?.purpose === 'session-title') {
-    return {
-      kind: 'title',
-      text: 'Conversation',
-      usage: makeUsage(100, 5),
-      model: request?.model,
-    }
-  }
-
-  const system = systemText(request).toLowerCase()
-  if (!system.includes('title')) return null
-  const sentenceCase = system.includes('sentence-case title')
-  const jsonField =
-    system.includes('return json') &&
-    system.includes('field') &&
-    (system.includes('coding session') || system.includes('this session'))
-  if (!sentenceCase && !jsonField) return null
-
-  return {
-    kind: 'title',
-    text: 'Conversation',
     usage: makeUsage(100, 5),
     model: request?.model,
   }

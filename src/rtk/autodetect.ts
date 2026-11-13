@@ -3,7 +3,7 @@
  * Ported from dsh-our-free-model / open-sse/rtk autodetect under MIT license.
  */
 
-import { DETECT_WINDOW } from './constants.js'
+import { DETECT_WINDOW, RTK_DIFF_MARKER } from './constants.js'
 import type { RtkFilterFn } from './applyFilter.js'
 import { gitDiff } from './filters/gitDiff.js'
 import { gitStatus } from './filters/gitStatus.js'
@@ -18,11 +18,23 @@ import { searchList } from './filters/searchList.js'
 import { buildOutput } from './filters/buildOutput.js'
 import { table } from './filters/table.js'
 
+/**
+ * Porcelain v1 status codes: two columns, X (index) and Y (work tree).
+ *
+ * At least one column is always a real status letter — git never lists an
+ * entry as `'  '`. That matters because a line indented by four or more
+ * spaces has `line[2] === ' '` and `line.slice(0, 2) === '  '`, so a class
+ * that admits a bare space classifies every indented code block, quoted
+ * email, and nested YAML document as a git status. Requiring one status
+ * letter is the guard that keeps ordinary text away from `gitStatus`.
+ */
+const PORCELAIN_XY_RE = /^[MADRCU?!][MADRCU?! ]$|^[ MADRCU?!][MADRCU?!]$/
+
 export function isMostlyPorcelain(sampleLines: readonly string[]): boolean {
   if (sampleLines.length < 3) return false
   let porcelainCount = 0
   for (const line of sampleLines) {
-    if (line.length >= 3 && line[2] === ' ' && /^[MADRCU?! ]{2}$/.test(line.slice(0, 2))) {
+    if (line.length >= 3 && line[2] === ' ' && PORCELAIN_XY_RE.test(line.slice(0, 2))) {
       porcelainCount++
     }
   }
@@ -53,12 +65,16 @@ export function autoDetectFilter(text: string): RtkFilterFn | null {
   const lines = window.split('\n').filter((l) => l.trim().length > 0)
   if (lines.length === 0) return null
 
-  // Idempotency guard: prevent duplicate compaction on already-compacted outputs
+  // Idempotency guard: prevent duplicate compaction on already-compacted outputs.
+  // The pipeline compacts twice by design — once in tools/post-execute, again
+  // over the whole wire payload in llm/stream — so every filter's own output
+  // must be recognisable here, or the second pass treats a compacted blob as
+  // fresh input and truncates the remains.
   if (
-    text.includes('[full diff: rtk') ||
+    text.includes(RTK_DIFF_MARKER) ||
     text.includes('to save tokens; head and tail preserved') ||
-    text.includes('[repeated ')
-    || text.includes(' rows omitted')
+    text.includes('[repeated ') ||
+    text.includes(' rows omitted')
   ) {
     return null
   }

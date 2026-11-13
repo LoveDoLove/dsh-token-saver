@@ -8,20 +8,30 @@ results.
 
 ## Build and environment
 
-- Plugin version: 1.0.4
+- Plugin version: 1.0.5
 - Grep-folding fix commit: `8562f48234cf16b2261ccb3e63f6c5c233545b00`
   (`feat(tool-result-trim): read grep pattern from exec.arguments in production path`).
   Scenario A and C tables below were measured on the earlier doc commit
   `d7aa522`; scenario B was re-measured after the fix on identical code and
   environment, and its tables are current as of `8562f48`.
-- The `src/` tree is unchanged since the measured commits except for the
-  grep-folding fix, which touches only the grep path and therefore does not
-  affect scenarios A and C.
-- Since `8562f48`, v1.0.4 changed only `src/index.ts`, `src/local-responses/*`,
-  and `src/prompt-shaping/*` (DSH contract-compatibility fixes). The measured
-  paths — `src/config.ts`, `src/strategies/`, `src/lib/`, `src/rtk/` — are
-  byte-identical, so the tables below still describe the v1.0.4 code path.
-  The reproducible rows were re-run on v1.0.4 and matched the recorded values.
+- **The measured paths are NOT byte-identical across releases.** v1.0.5
+  (`5a335ea`) added `src/rtk/filters/table.ts` plus its registration and
+  autodetect wiring, and added the `compactPressureThreshold` two-stage gate in
+  `src/strategies/context-pressure.ts`. An earlier revision of this document
+  claimed `src/config.ts`, `src/strategies/`, `src/lib/`, and `src/rtk/` were
+  byte-identical since `8562f48`; that claim was false as of v1.0.5 and has been
+  removed.
+- What that does and does not affect: none of the three reproducible scenarios
+  exercises the table filter or the pressure gate —
+  `src/strategies/context-pressure.ts` is not called by `bench-tmp.ts` at all,
+  and the table filter only matches CLI table output. The reproducible rows were
+  re-run on v1.0.5 and matched the recorded values exactly (see below), which is
+  direct evidence rather than the earlier byte-identity argument. The
+  **B-production** rows were not re-run and remain unreproducible (see
+  [Reproducibility status](#reproducibility-status)).
+- Re-verified on: v1.0.5, Node.js v24.22.3, Linux — scenario A 182,892 → 24,675
+  (86.5%), scenario B-library 19,781 → 1,301 (93.4%), scenario C 9,423 → 2,163
+  (77.0%), each byte-exact against the tables below.
 - DSH version: 0.2.1-rc.2
 - Node.js: v24.22.0
 - OS: Linux 6.18.33.2-microsoft-standard-WSL2 (WSL2)

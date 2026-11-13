@@ -30,6 +30,19 @@ export const LS_NOISE_DIRS = new Set([
   '__pycache__',
 ])
 
+/**
+ * Stamped on compacted git-diff output.
+ *
+ * Two jobs, and the second is the load-bearing one: it tells the model the
+ * uncompacted diff is still retrievable, and it lets the autodetector
+ * recognise the output as already-compacted. Without it, a diff that was
+ * restructured but not truncated carries no trace of the first pass, and the
+ * second pass (llm/stream) re-detects the header-less hunks as generic text
+ * and truncates the wreckage again — 900 files collapsed to a few hundred
+ * bytes with the model told that was the whole diff.
+ */
+export const RTK_DIFF_MARKER = '[full diff: rtk git diff --no-compact]'
+
 export const DEDUP_LINE_MAX = 1000
 export const SMART_TRUNCATE_MIN_LINES = 50
 export const SMART_TRUNCATE_HEAD = 20

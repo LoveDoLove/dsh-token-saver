@@ -59,8 +59,15 @@ export type AssembleListener = (
  * The listener never vetoes the chain: it awaits `next()` first and returns
  * the transformed assembly, so other listeners (tools, contexts, variables)
  * still run. Any failure degrades to "no shaping", never to a broken step.
+ *
+ * `onInjected` fires only when a shaping section is actually appended — not
+ * when the prompt is already present, disabled, or discarded — so it is an
+ * accurate count of model steps that carried shaping.
  */
-export function createAssembleInjector(getPromptText: () => string): AssembleListener {
+export function createAssembleInjector(
+  getPromptText: () => string,
+  onInjected?: () => void,
+): AssembleListener {
   return async (assembly, _context, next) => {
     // A downstream failure is not ours: it must surface unchanged, so this
     // call is deliberately NOT wrapped in a try/catch.
@@ -87,6 +94,13 @@ export function createAssembleInjector(getPromptText: () => string): AssembleLis
           interpolate: false,
         } satisfies PromptSectionLike,
       ]
+      // Count only the step that really carried the prompt; the call is
+      // guarded because telemetry must never break prompt assembly.
+      try {
+        onInjected?.()
+      } catch {
+        // Fail open: a broken counter must not cost the model its prompt.
+      }
       return { ...result, sections: nextSections }
     } catch {
       // Any failure of our own degrades to "no shaping", never to a broken

@@ -77,13 +77,21 @@
     },
     "./client": "./client.js"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "oxlint src test",
-    "lint:fix": "oxlint --fix src test"
+    "lint:fix": "oxlint --fix src test",
+    "prepare": "npm run build",
+    "prepack": "npm run lint && npm run typecheck && npm run test && npm run build && npm run verify:package",
+    "verify:package": "node scripts/verify-package.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0 <5.0.0",

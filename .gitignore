@@ -8,3 +8,9 @@ coverage/
 *.tsbuildinfo
 *.timestamp-*.mjs
 
+# Build output only. Must stay anchored: a bare `lib/` also matches `src/lib/`,
+# which holds real sources and would silently swallow any new file added there.
+/lib/
+
+# Release artifacts are attached to GitHub Releases, never committed.
+*.tgz

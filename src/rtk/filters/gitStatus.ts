@@ -11,6 +11,7 @@ export const gitStatus: RtkFilterFn = function gitStatus(status: string): string
   const staged: string[] = []
   const modified: string[] = []
   const untracked: string[] = []
+  const ignoredEntries: string[] = []
   const conflicts: string[] = []
   let branch = ''
 
@@ -37,9 +38,15 @@ export const gitStatus: RtkFilterFn = function gitStatus(status: string): string
       if (x === 'U' || y === 'U' || (x === 'A' && y === 'A') || (x === 'D' && y === 'D')) {
         conflicts.push(file)
       } else {
-        if (x !== ' ' && x !== '?') staged.push(`${x} ${file}`)
-        if (y !== ' ' && y !== '?') modified.push(`${y} ${file}`)
+        // '!!' is the ignored marker (git status --ignored), not a staged or
+        // modified entry: it must not be reported as either.
+        const ignored = x === '!' && y === '!'
+        if (!ignored) {
+          if (x !== ' ' && x !== '?') staged.push(`${x} ${file}`)
+          if (y !== ' ' && y !== '?') modified.push(`${y} ${file}`)
+        }
         if (x === '?' && y === '?') untracked.push(file)
+        if (ignored) ignoredEntries.push(file)
       }
       continue
     }
@@ -86,12 +93,27 @@ export const gitStatus: RtkFilterFn = function gitStatus(status: string): string
     parts.push(s)
   }
 
+  if (ignoredEntries.length > 0) {
+    const shown = ignoredEntries.slice(0, STATUS_MAX_UNTRACKED)
+    const extra = ignoredEntries.length - shown.length
+    let s = `ignored (${ignoredEntries.length}):\n${shown.map((f) => `  ${f}`).join('\n')}`
+    if (extra > 0) s += `\n  ... and ${extra} more`
+    parts.push(s)
+  }
+
   if (parts.length === 0) {
     // An empty status is a fact the model must be told explicitly: silence
     // reads as "the command failed" and the model runs status again.
     return 'Clean working tree'
   }
-  if (branch && conflicts.length === 0 && staged.length === 0 && modified.length === 0 && untracked.length === 0) {
+  if (
+    branch &&
+    conflicts.length === 0 &&
+    staged.length === 0 &&
+    modified.length === 0 &&
+    untracked.length === 0 &&
+    ignoredEntries.length === 0
+  ) {
     return `branch: ${branch}\nClean working tree`
   }
   return parts.join('\n\n')

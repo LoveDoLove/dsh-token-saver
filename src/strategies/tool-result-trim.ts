@@ -33,6 +33,13 @@ export interface ToolResultTrimResult {
   readonly folded: boolean
   readonly originalBytes: number
   readonly trimmedBytes: number
+  /** Which strategy produced the trim; absent when nothing was folded. */
+  readonly strategy?: 'head-tail' | 'head-only' | 'tail-only' | 'rtk'
+  /**
+   * Set when `strategy` is 'rtk'. Without it a caller cannot distinguish a
+   * legitimate structured-output compaction from an autodetect misfire.
+   */
+  readonly rtkFilter?: string
 }
 
 const GREP_LIKE_TOOLS = new Set([
@@ -143,10 +150,16 @@ export function decidePostTool(payload: PostToolPayloadLike, options: ToolResult
     //    non-empty result. Sub-threshold outputs still get the RTK pass.
     let rtkApplied = false
     if (config.rtkEnabled) {
+      // Autodetection samples only the first DETECT_WINDOW bytes and can
+      // misclassify prose as `git status` output, which the gitStatus filter
+      // then crushes to two lines. For read-like tools the payload is an
+      // arbitrary file or response body, so only an explicit filter may apply.
+      const implicit = !(toolName && READ_LIKE_TOOLS.has(toolName))
       const rtkResult = compressText(
         aggregated.text,
         rtkStats,
         toolName ? TOOL_RTK_FILTERS[toolName] : undefined,
+        implicit,
       )
       if (rtkResult.compressed) {
         newAggregate = rtkResult.text
@@ -204,7 +217,7 @@ export function decidePostTool(payload: PostToolPayloadLike, options: ToolResult
 
     let decision: PostToolDecision
     if (trimmedBytes < originalBytes) {
-      const rebuiltContent = rebuildContent(content, aggregated.segments, newAggregate, aggregated.text)
+      const rebuiltContent = rebuildContent(content, aggregated.segments, newAggregate)
       decision = { kind: 'accept', content: rebuiltContent }
     } else {
       decision = { kind: 'accept', content }
@@ -215,6 +228,8 @@ export function decidePostTool(payload: PostToolPayloadLike, options: ToolResult
       folded: originalBytes - trimmedBytes > 0,
       originalBytes,
       trimmedBytes,
+      strategy,
+      rtkFilter,
     }
   } catch {
     // Fail open: preserve the original result untouched.
@@ -267,40 +282,95 @@ function losslessBlock(block: ToolContentBlock): ToolContentBlock {
   return clean as unknown as ToolContentBlock
 }
 
+/**
+ * Move `offset` back to the nearest UTF-8 character boundary in `buf`.
+ *
+ * `Buffer.subarray(...).toString('utf8')` silently substitutes U+FFFD when the
+ * slice starts mid-character, so any byte-offset split must land on a boundary.
+ */
+function floorCharBoundary(buf: Buffer, offset: number): number {
+  let i = Math.min(Math.max(0, offset), buf.length)
+  while (i > 0 && i < buf.length && (buf[i]! & 0xc0) === 0x80) i--
+  return i
+}
+
+/**
+ * Split `text` into `shares.length` parts whose UTF-8 byte sizes are
+ * proportional to `shares`, without duplicating or dropping any byte.
+ *
+ * The last part absorbs the rounding remainder, so the concatenation is always
+ * exactly `text`.
+ */
+function splitTextByByteShares(text: string, shares: readonly number[]): string[] {
+  const count = shares.length
+  if (count === 0) return []
+  if (count === 1) return [text]
+
+  const totalShare = shares.reduce((sum, s) => sum + Math.max(0, s), 0)
+  const buf = Buffer.from(text, 'utf8')
+  if (totalShare <= 0 || buf.length === 0) {
+    // Nothing to weight by: keep the payload in one place rather than
+    // repeating it across every block.
+    return shares.map((_, i) => (i === 0 ? text : ''))
+  }
+
+  const parts: string[] = []
+  let offset = 0
+  for (let i = 0; i < count; i++) {
+    if (i === count - 1) {
+      parts.push(buf.subarray(offset).toString('utf8'))
+      break
+    }
+    const want = offset + Math.floor((Math.max(0, shares[i]!) / totalShare) * buf.length)
+    const end = Math.max(offset, floorCharBoundary(buf, want))
+    parts.push(buf.subarray(offset, end).toString('utf8'))
+    offset = end
+  }
+  return parts
+}
+
 function rebuildContent(
   content: readonly ToolContentBlock[],
   segments: readonly { start: number; end: number }[],
   newText: string,
-  originalText: string,
 ): readonly ToolContentBlock[] {
   if (content.length === 1) {
     // Never assign `data: undefined`: the key alone makes the block fail the
     // lossless snapshot even though the payload is otherwise plain JSON.
     return [{ type: 'text', text: newText }]
   }
-  const out: ToolContentBlock[] = []
-  let pos = 0
-  const newTextBytes = Buffer.byteLength(newText, 'utf8')
-  const originalBytes = Buffer.byteLength(originalText, 'utf8')
-  const prefix = newText.startsWith(originalText.slice(0, Math.min(50, originalText.length / 2)))
-    ? newText.slice(0, newText.indexOf('\n\n[... '))
-    : newText.slice(0, Math.min(newTextBytes, originalBytes / 3))
 
-  for (const block of content) {
+  // Decide how much of the compacted text each text block receives, weighted by
+  // that block's share of the original aggregate. The old head/tail heuristic
+  // sliced `newText` with UTF-16 code-unit indices while every size in scope is
+  // a UTF-8 byte count; for CJK that overshoots by 3x and the head and tail
+  // ranges overlapped, so a 1500-byte payload came back out as 3000 duplicated
+  // bytes.
+  const textIndexes: number[] = []
+  const shares: number[] = []
+  for (const [i, block] of content.entries()) {
+    if (block.type === 'text' && typeof block.text === 'string') {
+      const segment = segments[i]
+      shares.push(
+        segment ? Math.max(0, segment.end - segment.start) : Buffer.byteLength(block.text, 'utf8'),
+      )
+      textIndexes.push(i)
+    }
+  }
+
+  const parts = splitTextByByteShares(newText, shares)
+  const textByIndex = new Map<number, string>()
+  for (const [n, blockIndex] of textIndexes.entries()) {
+    textByIndex.set(blockIndex, parts[n] ?? '')
+  }
+
+  const out: ToolContentBlock[] = []
+  for (const [i, block] of content.entries()) {
     if (block.type !== 'text' || typeof block.text !== 'string') {
       out.push(losslessBlock(block))
-      pos += Buffer.byteLength(`[non-text block: ${block.type}]`, 'utf8')
       continue
     }
-    if (pos === 0) {
-      out.push(losslessBlock({ ...block, text: prefix.length > 0 ? prefix : newText }))
-    } else if (newTextBytes > 0) {
-      const tail = newText.slice(-Math.max(0, originalBytes - pos))
-      out.push(losslessBlock({ ...block, text: tail.length > 0 ? tail : '' }))
-    } else {
-      out.push(losslessBlock({ ...block, text: '' }))
-    }
-    pos += Buffer.byteLength(block.text, 'utf8')
+    out.push(losslessBlock({ ...block, text: textByIndex.get(i) ?? '' }))
   }
   return out
 }

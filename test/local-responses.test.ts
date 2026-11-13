@@ -74,7 +74,7 @@ describe('Local Responses - 5 Types Detection & Generation', () => {
     const detected1 = detectLocalResponse(optsPurpose)
     expect(detected1).not.toBeNull()
     expect(detected1?.kind).toBe('title')
-    expect(detected1?.text).toBe('Conversation')
+    expect(detected1?.text).toBe('Help me debug this memory issue')
 
     // Via system prompt heuristic
     const optsSystem: GenerateOptionsLike = {
@@ -84,6 +84,32 @@ describe('Local Responses - 5 Types Detection & Generation', () => {
     const detected2 = detectLocalResponse(optsSystem)
     expect(detected2).not.toBeNull()
     expect(detected2?.kind).toBe('title')
+  })
+
+  it('unwrap the DSH title provider envelope and never returns a constant title', () => {
+    const opts: GenerateOptionsLike = {
+      purpose: 'session-title',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text:
+                'Generate the session title from this JSON array of human messages:\n' +
+                JSON.stringify([{ role: 'user', content: 'Fix the flaky login test' }]),
+            },
+          ],
+        },
+      ],
+    }
+    const detected = detectLocalResponse(opts)
+    expect(detected?.kind).toBe('title')
+    expect(detected?.text).toBe('Fix the flaky login test')
+
+    // No usable text: yield to the real request rather than answering "Conversation".
+    const empty: GenerateOptionsLike = { purpose: 'session-title', messages: [] }
+    expect(detectLocalResponse(empty)).toBeNull()
   })
 
   it('detects and handles suggestion mode', () => {

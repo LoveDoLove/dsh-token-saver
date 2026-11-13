@@ -64,6 +64,13 @@ export function compressText(
   text: string,
   stats?: RtkStats,
   explicitFilterName?: string,
+  /**
+   * Set false for content whose shape is unknown (file reads, fetches): the
+   * autodetector guesses from the first 1024 bytes and can misfire on prose
+   * that merely looks like `git status` output, destroying it. An explicit
+   * filter name still applies.
+   */
+  allowAutoDetect = true,
 ): CompressTextResult {
   if (typeof text !== 'string') {
     return { text, filterUsed: null, savedBytes: 0, compressed: false }
@@ -78,7 +85,7 @@ export function compressText(
   if (explicitFilterName) {
     filterFn = resolveFilter(explicitFilterName)
   }
-  if (!filterFn) {
+  if (!filterFn && allowAutoDetect) {
     filterFn = autoDetectFilter(text)
   }
 

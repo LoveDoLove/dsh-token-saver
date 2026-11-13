@@ -342,7 +342,7 @@ describe('rebuildContent lossless contract', () => {
       { type: 'text', text: original, data: undefined },
       { type: 'text', text: original, data: undefined },
     ]
-    const out = __testing.rebuildContent(content, [], 'short', original)
+    const out = __testing.rebuildContent(content, [], 'short')
     expect(out.length).toBe(2)
     for (const block of out) {
       expect(Object.prototype.hasOwnProperty.call(block, 'data')).toBe(false)
@@ -352,7 +352,7 @@ describe('rebuildContent lossless contract', () => {
 
   it('keeps the single-block fast path free of the data key', () => {
     const original = bigText(3000)
-    const out = __testing.rebuildContent([{ type: 'text', text: original, data: undefined }], [], 'short', original)
+    const out = __testing.rebuildContent([{ type: 'text', text: original, data: undefined }], [], 'short')
     expect(out.length).toBe(1)
     expect(out[0]).not.toHaveProperty('data')
     expect(isLossless(out)).toBe(true)
@@ -364,9 +364,66 @@ describe('rebuildContent lossless contract', () => {
       [{ type: 'text', text: original }, { type: 'image', data: undefined } as never],
       [],
       'short',
-      original,
     )
     expect(out.length).toBe(2)
     expect(isLossless(out)).toBe(true)
+  })
+
+  // Regression: the head/tail heuristic sliced `newText` with UTF-16 code-unit
+  // indices while every size in scope was a UTF-8 byte count. For CJK (3 bytes
+  // per code unit) both slices overshot the whole string, so the rebuilt blocks
+  // contained the payload twice and the compaction *grew* the result: a
+  // 1500-byte text came back as 3000 bytes.
+  it('never duplicates multibyte content across blocks', () => {
+    const blockText = '中文测试内容'.repeat(50) // 300 chars, 900 UTF-8 bytes
+    const content = [
+      { type: 'text', text: blockText },
+      { type: 'text', text: blockText },
+    ]
+    const original = content.map((b) => b.text).join('\n\n')
+    const newText = '文'.repeat(500) // 1500 UTF-8 bytes
+
+    const out = __testing.rebuildContent(content, [], newText)
+    const total = out.reduce((sum, b) => sum + Buffer.byteLength((b as { text: string }).text, 'utf8'), 0)
+
+    expect(total).toBe(Buffer.byteLength(newText, 'utf8'))
+    expect(total).toBeLessThanOrEqual(Buffer.byteLength(original, 'utf8'))
+  })
+
+  it('never emits a half-character when splitting multibyte text', () => {
+    const blockText = '中文测试内容'.repeat(50)
+    const content = [
+      { type: 'text', text: blockText },
+      { type: 'text', text: blockText },
+      { type: 'text', text: blockText },
+    ]
+    // Uneven shares force the split point to land mid-character: 1000 bytes is
+    // not a multiple of 3, so a naive Buffer slice would emit U+FFFD.
+    const segments = [
+      { start: 0, end: 1000 },
+      { start: 1000, end: 2000 },
+      { start: 2000, end: 2997 },
+    ]
+    const newText = '文'.repeat(999) // 2997 bytes
+
+    const out = __testing.rebuildContent(content, segments, newText)
+    const joined = out.map((b) => (b as { text: string }).text).join('')
+
+    expect(joined).not.toContain('\uFFFD')
+    expect(joined).toBe(newText)
+  })
+
+  it('keeps the payload once when blocks carry no segment weighting', () => {
+    const original = bigText(3000)
+    const content = [
+      { type: 'text', text: original },
+      { type: 'text', text: original },
+    ]
+    const newText = 'compact'
+
+    const out = __testing.rebuildContent(content, [], newText)
+    const joined = out.map((b) => (b as { text: string }).text).join('')
+
+    expect(joined.split(newText).length - 1).toBe(1)
   })
 })

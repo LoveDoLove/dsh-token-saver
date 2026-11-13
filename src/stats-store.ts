@@ -32,6 +32,7 @@ export function emptyTotals(): TotalSavings {
     saved: 0,
     calls: 0,
     blocks: 0,
+    promptCalls: 0,
   }
 }
 
@@ -63,17 +64,22 @@ export class StatsStore {
    * invocations that produced at least one of them: one request compacting
    * three blocks advances `calls` by one and `blocks` by three. An
    * invocation without a hit records nothing and never touches the file.
+   *
+   * `promptInjected` is the separate prompt-shaping signal: it advances
+   * `promptCalls` and is recorded even when the pass compressed no bytes,
+   * because a shaped prompt is a real injection that saves nothing here.
    */
-  record(stats: RtkStats | null | undefined): TotalSavings {
+  record(stats: RtkStats | null | undefined, promptInjected = false): TotalSavings {
     try {
       const blocks = Array.isArray(stats?.hits) ? stats.hits.length : 0
-      if (blocks <= 0) return this.get()
+      if (blocks <= 0 && !promptInjected) return this.get()
       this.totals = {
         bytesBefore: this.totals.bytesBefore + toCounter(stats?.bytesBefore),
         bytesAfter: this.totals.bytesAfter + toCounter(stats?.bytesAfter),
         saved: this.totals.saved + toCounter(stats?.saved),
-        calls: this.totals.calls + 1,
+        calls: this.totals.calls + (blocks > 0 ? 1 : 0),
         blocks: this.totals.blocks + blocks,
+        promptCalls: this.totals.promptCalls + (promptInjected ? 1 : 0),
       }
       this.save()
     } catch {
@@ -93,6 +99,7 @@ export class StatsStore {
         saved: toCounter(parsed.saved),
         calls: toCounter(parsed.calls),
         blocks: toCounter(parsed.blocks),
+        promptCalls: toCounter(parsed.promptCalls),
       }
     } catch {
       // Fail open on read/parse failure: start from zero instead of crashing.

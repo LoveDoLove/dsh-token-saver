@@ -3,16 +3,15 @@
  * Ported from dsh-our-free-model / open-sse/rtk git::compact_diff under MIT license.
  */
 
-import { GIT_DIFF_HUNK_MAX_LINES } from '../constants.js'
+import { GIT_DIFF_HUNK_MAX_LINES, RTK_DIFF_MARKER } from '../constants.js'
 import type { RtkFilterFn } from '../applyFilter.js'
 
 export const gitDiff: RtkFilterFn = function gitDiff(diff: string, maxLines = GIT_DIFF_HUNK_MAX_LINES): string {
-  if (diff.includes('[full diff: rtk git diff --no-compact]')) {
+  if (diff.includes(RTK_DIFF_MARKER)) {
     return diff
   }
   const files = diff.split(/^diff --git /m)
   const result: string[] = []
-  let totalTruncated = false
 
   for (const file of files) {
     if (!file.trim()) continue
@@ -55,7 +54,6 @@ export const gitDiff: RtkFilterFn = function gitDiff(diff: string, maxLines = GI
 
     if (truncatedLines > 0) {
       fileHeader.push(`  ... (${truncatedLines} lines truncated)`)
-      totalTruncated = true
     }
 
     const summaryParts: string[] = []
@@ -67,8 +65,13 @@ export const gitDiff: RtkFilterFn = function gitDiff(diff: string, maxLines = GI
   }
 
   let output = result.join('\n\n')
-  if (totalTruncated) {
-    output += '\n\n[full diff: rtk git diff --no-compact]'
+  // Always stamp, not only when hunks were dropped. The pass that truncated
+  // nothing still reshaped the diff (git headers stripped, per-file summary
+  // prepended), and that reshaped form is what the guard keys on. Stamping
+  // only on truncation left lossless compactions unrecognisable, so the next
+  // pass truncated them as if they were raw log text.
+  if (output) {
+    output += `\n\n${RTK_DIFF_MARKER}`
   }
   return output
 }

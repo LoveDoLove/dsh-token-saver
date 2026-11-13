@@ -53,10 +53,11 @@ export function foldGrepResult(input: string, options: GrepFoldOptions = {}): Gr
 
   const lines = input.split('\n')
   const keepSet = new Set<number>()
+  const matches = compileMatcher(pattern)
   let matched = 0
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? ''
-    if (containsPattern(line, pattern)) {
+    if (matches(line)) {
       matched++
       if (matched > maxMatches) {
         truncatedMatches++
@@ -121,14 +122,21 @@ export function foldGrepResult(input: string, options: GrepFoldOptions = {}): Gr
   }
 }
 
-function containsPattern(line: string, pattern: string): boolean {
+/**
+ * Compile the pattern once, outside the per-line loop. Building a RegExp per
+ * line is O(lines) compilations and lets a pathological model-supplied pattern
+ * (`/(a+)+$/`) pin the event loop on every line of a large result.
+ */
+function compileMatcher(pattern: string): (line: string) => boolean {
   if (pattern.startsWith('/') && pattern.endsWith('/') && pattern.length > 2) {
     const body = pattern.slice(1, -1)
+    let re: RegExp
     try {
-      return new RegExp(body).test(line)
+      re = new RegExp(body)
     } catch {
-      return line.includes(body)
+      return (line) => line.includes(body)
     }
+    return (line) => re.test(line)
   }
-  return line.includes(pattern)
+  return (line) => line.includes(pattern)
 }
