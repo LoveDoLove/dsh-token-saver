@@ -4,176 +4,131 @@
   <a href="https://trendshift.io/repositories/312537"><img src="docs/images/trendshift.svg" alt="DSH Token Saver on Trendshift" width="250" height="55"></a>
 </div>
 
-**裁剪过大的工具输出，把更多上下文窗口留给模型。**
+**把更多上下文窗口留给模型。**
+一个 DeepSeek Harness 插件：裁剪过大的工具输出，折叠 grep 结果，并按需提供提示词塑形和本地应答。
 
-面向 [DeepSeek Harness（DSH）](https://github.com/deepseek-ai/deepseek-harness) 的可配置 Token 优化插件。它在文件读取、grep 结果和命令日志进入对话之前压缩这些内容，并提供可选的上下文压力处理、提示词塑形、本地响应和导出的 LLM 摘要引擎。
+[English](README.md) · [文档](docs/README.md) · [版本发布](https://github.com/LoveDoLove/dsh-token-saver/releases) · [问题反馈](https://github.com/LoveDoLove/dsh-token-saver/issues)
 
-[English](README.md) · [版本发布](https://github.com/LoveDoLove/dsh-token-saver/releases) · [问题反馈](https://github.com/LoveDoLove/dsh-token-saver/issues)
+## 为什么
 
-## 为什么需要它
+工具输出是填满上下文窗口最快的方式。一次文件读取、一次 `grep`、一份构建日志，就可能加入模型根本不需要的几万字节，而这些内容会留在对话里，影响之后的每一轮。
 
-工具输出是填满上下文窗口最快的方式。一次文件读取或一次 `grep` 输出就可能为会话增加数万字节，而其中大部分内容模型根本用不到 —— 并且这些 token 会在之后的每一轮中持续占用。
-
-DSH Token Saver 在 DSH 的工具执行边界拦截这些输出：对过长结果保留开头和结尾，把 grep 输出折叠为仅保留匹配项，并通过 RTK 压缩结构化命令输出。所有行为均可配置，额外功能（提示词塑形、RTK、本地响应）默认关闭。
-
-**快速安装。** 运行 `dsh plugin --profile web add github:LoveDoLove/dsh-token-saver`。指定版本安装与构建脚本授权见 [安装](#安装)。
+Token Saver 工作在 DSH 的工具执行边界：保留长结果的开头和结尾，把搜索结果折叠到匹配项附近，并可按需应用形状感知的 RTK 过滤器。它不触碰用户消息、助手消息和错误结果，并且在出错时放行原始内容。
 
 ## 功能
 
-| 功能 | 说明 | 默认状态 |
+| 功能 | 作用 | 默认 |
 |---|---|---|
-| 工具输出裁剪 | 对过长的工具结果保留开头和结尾 | 除 `off` 外的所有模式均启用 |
-| Grep 结果折叠 | 折叠大型 grep 输出并保留有用上下文 | 除 `off` 外的所有模式均启用 |
-| 上下文压力处理 | 监测上下文压力，并可在更高模式下触发压缩 | `conservative` 下关闭，`balanced`/`aggressive` 下启用 |
-| RTK 集成 | 通过 RTK 压缩受支持命令的输出 | 关闭 |
-| Caveman 提示词处理 | 使用可配置的精简提示词风格 | 关闭 |
-| Ponytail 提示词处理 | 采用尽量小改动、完整解决任务的处理风格 | 关闭 |
-| 本地响应 | 对支持的探测请求直接返回结果，无需调用 LLM | 关闭 |
-| LLM 摘要引擎 | 导出的引擎类，供选择压缩 provider 的宿主使用 | 不自动应用 |
-| 提示词塑形 | 将 Caveman/Ponytail 文本注册为 DSH 系统提示词片段 | 关闭 |
-| Web 设置面板 | 在 **Settings → Token Saver** 中配置插件 | DSH Web 可用 |
+| 工具输出裁剪 | 保留超大结果的开头和结尾 | 开启 |
+| grep 折叠 | 保留匹配行及其上下文 | 开启 |
+| RTK 过滤器 | 针对 diff、日志、树、表格的形状感知压缩 | 关闭 |
+| Caveman 塑形 | 简洁直接，保留精确代码和路径 | 关闭 |
+| Ponytail 塑形 | 最小改动、最小 diff 风格 | 关闭 |
+| 本地响应 | 本地回答配额、前缀、标题、建议、文件路径探测 | 关闭 |
+| 上下文压力 | 超过阈值时触发压缩 | 关闭 |
+| Web 面板 | 在 **设置 → Token Saver** 中配置并查看节省量 | DSH Web 可用 |
 
-## 安装
+所有功能都可以关闭。`mode: off` 会禁用全部工具输出压缩；提示词塑形和本地响应有各自独立的开关。
 
-通过 DSH 从 GitHub 仓库安装：
+## 快速开始
 
 ```bash
 dsh plugin --profile web add github:LoveDoLove/dsh-token-saver
 ```
 
-如果 DSH/pnpm 要求批准构建脚本，请按终端提示完成授权后重新安装。之后根据当前 DSH 安装方式重新加载或重启目标 profile。
-
-> 本项目以 GitHub 仓库和 GitHub Releases 为准；有固定版本的正式发行版时，建议安装指定版本。
-
-安装当前指定的 v1.0.5 正式版本：
+固定到当前版本：
 
 ```bash
 dsh plugin --profile web add github:LoveDoLove/dsh-token-saver#v1.0.5
 ```
 
-预构建产物 `dsh-token-saver-1.0.5.tgz` 也可从 [v1.0.5 版本发布页](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.5) 下载，作为本地包安装，无需本地构建环境。
+如果 DSH 要求批准构建脚本，按提示操作后重试。也可以在
+[v1.0.5 发布页](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.5)
+下载预构建的 `dsh-token-saver-1.0.5.tgz`，无需本地构建环境。
 
-> **v1.0.5 修复了一个会销毁数据的缺陷，若你会通过工具读取文件，建议升级。**
-> RTK 自动探测只检查工具结果开头的若干字节，而 README 风格的正文（`## ` 标题）
-> 会命中 `git status` 的启发式判断，于是过滤器把整段内容压缩成两三行。以本仓库自己的
-> README.md 为例，11,245 字节被压成 1,691 字节，**85% 的内容被静默丢弃**。
-> 现在读类工具（`read`、`cat`、`view`、`fetch`、`curl` 等）不再走隐式自动探测，
-> 仅显式指定的过滤器仍然生效。v1.0.5 还修复了 `git status` 的 `!!` 条目被同时计入
-> staged 与 modified、把 grep 折叠的正则提取到逐行循环之外（消除 ReDoS），
-> 并在结果对象中标注实际生效的裁剪策略。
->
-> v1.0.5 同时新增 `rtk/filters/table` 表格压缩过滤器与两段式 `compactPressureThreshold` 闸门，并停止将构建产物提交进仓库。构建产物改由 `prepare` 脚本在安装时生成，因此通过 git URL 安装需要授权执行该脚本（见上方的构建脚本提示）。若安装环境无法执行安装脚本，请改用 `.tgz` 产物。
-> v1.0.5 保留 v1.0.4/v1.0.3 的 DSH 合约兼容性修复与 grep 模式修复（commit `8562f48`）；v1.0.2 正式版早于该 grep 修复。
-
-## 工作方式
-
-DSH Token Saver 接入 DSH 的工具执行流程：
-
-1. **Post-execute 钩子** — 工具返回后，过长的输出会被裁剪为保留开头和结尾；grep 结果会折叠为仅保留匹配项；RTK 可压缩结构化命令输出。
-2. **上下文压力处理** — 当上下文压力超过阈值时，更高模式可在下一步之前触发压缩。
-3. **提示词塑形** — Caveman 与 Ponytail 文本作为系统提示词片段注册，绝不改写已冻结的 agent 循环请求。
-4. **本地响应** — 支持的探测形状无需调用模型即可回答。
-
-所有处理路径均为故障开放（fail-open）：任何优化出错时，原始内容都会被原样保留。
+> **从 v1.0.4 或更早版本升级？** v1.0.5 修复了 RTK 自动检测中的数据破坏问题，该问题可能把 README 风格的正文压缩成几行。如果你通过工具读取文件，请升级。
 
 ## 配置
 
-在 DSH Web 中打开 **Settings → Token Saver**，即可使用设置面板。也可以通过 DSH bundle 配置文件进行配置。
-
-示例：
+配置写在 DSH profile 的 bundle 行里。一个典型配置：
 
 ```yaml
-dsh-token-saver:
-  mode: conservative # off | conservative | balanced | aggressive
-  rtkEnabled: false
-  cavemanLevel: off # off | lite | full | ultra | wenyan-lite | wenyan | wenyan-ultra
-  ponytailLevel: off # off | lite | full | ultra
-  localResponsesEnabled: false
-  localResponses: [quota, prefix, title, suggestion, filepath]
-  llmSummaryEnabled: false
+- id: dsh-token-saver
+  name: dsh-token-saver
+  config:
+    mode: conservative
+    headBytes: 16384
+    tailBytes: 8192
+    rtkEnabled: false
+    cavemanLevel: off
+    ponytailLevel: off
+    localResponsesEnabled: false
 ```
 
-### 关键配置项
+| 模式 | 行为 |
+|---|---|
+| `off` | 不裁剪、不折叠、不启用 RTK |
+| `conservative` | 只裁剪和折叠，不压缩会话 |
+| `balanced` | 在启用时加入压力驱动的压缩 |
+| `aggressive` | 与 balanced 相同，但压缩门槛更低 |
 
-| 配置项 | 默认值 | 说明 |
-|---|---|---|
-| `mode` | `conservative` | 总开关，见[模式](#模式)。 |
-| `headBytes` / `tailBytes` | `16384` / `8192` | 裁剪工具结果时保留的开头与结尾字节数。不超过 `headBytes + tailBytes + 256` 的结果保持原样。 |
-| `grepMaxMatches` / `grepContextLines` | `30` / `2` | 折叠 grep 结果时保留的匹配数量，以及每个匹配前后保留的上下文行数。 |
-| `grepHeadBytes` / `grepTailBytes` | `8192` / `4096` | 折叠后 grep 结果的字节预算。 |
-| `pressureThreshold` | `0.5` | 上下文压力比例，超过该值时更高模式可触发压缩。 |
-| `llmSummaryEnabled` | `false` | 为兼容 API 保留；摘要压缩未接入 DSH 由 provider 选择的压缩 seam。 |
-| `replaceBasicCompaction` | `aggressive` 下为 `true` | 只记录警告，不替换 provider：压缩 provider 在 `cordis.yml` 中选择。 |
-| `includeToolNames` / `excludeToolNames` | `[]` | 将裁剪限制在指定工具，或跳过指定工具。 |
-| `cacheStableSections` | `[]` | 为兼容 API 保留；稳定性辅助函数已导出但不会自动应用。 |
+Web 面板把实时覆盖写入 `$DSH_HOME/token-saver/settings.json`。全部 22 个选项见[配置文档](docs/configuration.md)。
 
-### 模式
+## 工作方式
 
-- **off**：关闭 Token 优化处理（`rtkEnabled: true` 时 RTK 仍会执行）。
-- **conservative**：裁剪或折叠过长的工具输出，同时保留 DSH 原有的常规压缩流程。
-- **balanced**：启用更多上下文压力处理。
-- **aggressive**：启用更积极的裁剪与提示词塑形；使用前请检查相关配置。
+1. **`tools/post-execute`** — 判断结果是否需要压缩。错误和结构化值原样通过。
+2. **策略** — 按工具和结果形状选择 RTK 过滤器、grep 折叠或字节预算截断。
+3. **`ctx.systemPrompt.section()`** — 把 Caveman 或 Ponytail 文本作为提示词 section 注入。冻结的 LLM 请求不会被改写。
+4. **`llm/stream`** — 对识别出的探测请求在本地回答，usage 为零；其余情况原样通过。
 
-实际行为取决于各项配置和当前安装的 DSH 版本。请以当前版本的设置面板和配置默认值为准。
+## 安全
 
-## 统计信息
-
-Web 设置面板显示实时节省遥测数据，累计统计结果会持久化到 `~/.dsh/token-saver/stats.json`（或 `$DSH_HOME/token-saver/stats.json`），因此主机重启后仪表板仍会显示历史节省情况。
-
-- **已节省** — 所有压缩流程累计减少的字节数。
-- **节省比例** — 节省字节数占原始字节数的百分比。
-- **生效请求** — 产生至少一个被压缩文本块的压缩调用次数。
-- **压缩块数** — 实际被压缩的文本块数量。
-
-同一工具输出可能被压缩两次 —— 一次由 post-execute 钩子执行，另一次由 LLM/流式路径执行 —— 因此 `calls` 统计压缩事件，`blocks` 统计被压缩的文本块。由于每次压缩节省的字节数会累加到总量中，节省字节数保持精确。遥测的读写均为故障开放模式：存储异常不得影响压缩行为。
-
-> v1.0.2 起引入持久化累计节省统计。更早版本每次重启都会将仪表板重置为零。
-
-## 安全行为
-
-- **失败时保留原内容：** 优化过程失败或结果不可用时，保留原始内容。
-- **保留错误输出：** 工具输出过滤器不会压缩被标记为错误的结果。
-- **额外功能可单独启用：** RTK、提示词塑形和本地响应均可独立配置。
-- **不保证任务质量完全不变：** Token 优化可能改变模型能看到的信息。尤其启用激进压缩前，应先审查设置。
+- 错误结果永不压缩。
+- 只有非空且严格更小的结果才会被采用。
+- 所有策略出错时放行原始内容。
+- 提示词文本走受支持的 section API，不使用组装瀑布。
+- agent 循环的 LLM 请求永不被修改。
+- 非法配置在激活时失败，而不是被静默转换。
 
 ## 基准测试
 
-已验证的字节减少测量结果（插件 v1.0.5，DSH 0.2.1-rc.2，Node v24.22.3，Linux，模式 `conservative`，`rtkEnabled: false`）。每个场景都是对合成输入的确定性进程内调用，不涉及 DSH 会话或 LLM 请求。完整测试方法与可复现命令见 [docs/benchmark-results.md](docs/benchmark-results.md)，如何复现和报告测量结果见 [docs/benchmark-methodology.md](docs/benchmark-methodology.md)。
+合成测试数据上的 UTF-8 字节：
 
-| 场景 | 输入字节 | 输出字节 | 节省字节 | 减少比例 |
-|---|---:|---:|---:|---:|
-| 类读取工具输出（首尾裁剪） | 182,892 | 24,675 | 158,217 | 86.5% |
-| 类 grep 工具输出（生产路径，提供模式） | 29,321 | 8,145 | 21,176 | 72.2% |
-| 类 grep 工具输出（生产路径，无模式 — fail-open） | 29,321 | 12,321 | 17,000 | 58.0% |
-| 提供匹配模式时的 grep 折叠（库能力，19,781 字节输入） | 19,781 | 1,301 | 18,480 | 93.4% |
-| RTK 构建输出压缩 | 9,423 | 2,163 | 7,260 | 77.0% |
+| 场景 | 压缩前 | 压缩后 | 节省 |
+|---|---:|---:|---:|
+| 大 diff | 182,892 | 24,675 | 86.5% |
+| grep 结果 | 29,321 | 8,145 | 72.2% |
+| find 结果 | 29,321 | 12,321 | 58.0% |
+| 构建日志 | 19,781 | 1,301 | 93.4% |
+| 表格 | 9,423 | 2,163 | 77.0% |
 
-以上为通过压缩函数在进程内处理合成输入得到的 UTF-8 字节减少量，并非模型 token 数、token 成本节省、延迟改善或任务质量证据。生产环境的 grep 路径现已从 `exec.arguments` 提取搜索模式（commit `8562f48`）；93.4% 为折叠库在另一份更小输入上的能力，而非默认生产路径结果。
+字节不是 token。方法见[基准测试方法](docs/benchmark-methodology.md)。
 
-各行的可复现性不同：类读取、库级折叠和 RTK 三行可由仓库内已提交的 `npx tsx bench-tmp.ts` 脚本复现；两行 29,321 字节的生产路径数据是在未提交生成脚本的输入上测得的，因此按当前仓库状态无法重新运行。详见基准测试结果文档中的[可复现性说明](docs/benchmark-results.md#reproducibility-status)。
+## 文档
+
+- [白皮书](docs/whitepaper.zh-CN.md) · [Whitepaper](docs/whitepaper.md)
+- [架构](docs/architecture.md)
+- [配置](docs/configuration.md)
+- [工具输出压缩](docs/tool-output-compression.md)
+- [提示词塑形](docs/prompt-shaping.md)
+- [本地响应](docs/local-responses.md)
+- [统计](docs/statistics.md)
+- [兼容性](docs/compatibility.md)
+- [开发](docs/development.md)
 
 ## 兼容性
 
-项目设计上可与以下插件协同使用：
-
-- **Billion Context**：相关输出过滤器会保留带有 ACP 标记的内容。
-- **OmniRoute**：设计上保留请求中的路由字段。
-- **Our Free Model**：识别 `<!-- ofm-token-saver -->` 标记，避免重复应用提示词处理。
-
-实际兼容性取决于周边插件的版本和配置。反馈问题时请附上相关版本信息及可复现步骤。
+面向 DSH `>=0.2.0 <0.3.0` 和 Node `>=22.19.0`。可与 Billion Context、OmniRoute、Our Free Model 共存。详情见[兼容性文档](docs/compatibility.md)。
 
 ## 开发
 
-要求：Node.js `>=22.19.0` 和 pnpm。
-
 ```bash
 pnpm install
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
+pnpm prepack
 ```
+
+`pnpm prepack` 依次运行 lint、类型检查、测试、构建和包校验。Agent 指南见 [AGENTS.md](AGENTS.md)。
 
 ## 许可证
 
-MIT，详见 [LICENSE](LICENSE)。从第三方项目衍生的部分保留所需的署名和许可声明，具体请查看源文件及许可证说明。
+MIT

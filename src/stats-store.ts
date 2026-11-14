@@ -6,13 +6,13 @@
  * dashboard still reports savings after a host restart.
  *
  * Callers hand in per-invocation stats (the shared accumulator is never
- * recorded directly), so each compression pass is counted exactly once. A pass
- * that compresses nothing records nothing. Because the same tool output can be
- * compacted twice — once by tools/post-execute and again by llm/stream on the
- * already-compacted text — `calls` counts compaction events, `blocks` counts
- * compacted text blocks, and `saved` stays exact since per-pass savings add up
- * to the total reduction. Every read and write is fail-open: broken telemetry
- * must never affect compression behaviour or throw into a request path.
+ * recorded directly), so each compaction is counted exactly once. A pass that
+ * compresses nothing records nothing. `calls` counts invocations that produced
+ * at least one compacted block and `blocks` counts the blocks themselves, so one
+ * request compacting three blocks advances `calls` by one and `blocks` by three.
+ * `promptCalls` is the separate prompt-shaping signal. Every read and write is
+ * fail-open: broken telemetry must never affect compression behaviour or throw
+ * into a request path.
  */
 
 import fs from 'node:fs'
