@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Token Saver",
+    "description": "Cuts model-facing tokens by trimming tool output, folding grep results, applying Caveman and Ponytail prompt shaping, and answering quota, title, and suggestion requests locally. Configure it in Settings; savings appear on its dashboard."
+  }
+}

@@ -8,8 +8,10 @@
   "type": "module",
   "private": false,
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=22.19.0",
+    "dsh": ">=0.2.0 <0.3.0"
   },
+  "icon": "./icon.svg",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -40,6 +42,8 @@
     "lib",
     "client.js",
     "cordis.patch.yml",
+    "locale",
+    "icon.svg",
     "README.md",
     "LICENSE"
   ],
@@ -75,7 +79,9 @@
       "types": "./lib/types/local-responses/index.d.ts",
       "import": "./lib/local-responses/index.js"
     },
-    "./client": "./client.js"
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

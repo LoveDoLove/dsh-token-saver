@@ -109,7 +109,9 @@ describe('Compatibility & Coexistence', () => {
       expect(passedOpts?.provider).toBe('custom-omniroute-provider')
       expect(passedOpts?.model).toBe('deepseek-v3')
       expect(passedOpts?.tools?.length).toBe(1)
-      expect(passedOpts?.system).toContain('<!-- dsh-token-saver:prompt-shaping -->')
+      // The agent-loop request is frozen and content-addressed; shaping is a
+      // system-prompt section, never an in-place rewrite of this request.
+      expect(passedOpts?.system).toBe('System instruction.')
     })
   })
 

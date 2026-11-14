@@ -1,5 +1,10 @@
 # DSH 0.2.1-rc.2 — `llm/stream` runtime contract and LLM request/response shapes
 
+> **Status (v1.0.6):** the plugin no longer rewrites `llm/stream` requests or listens to
+> `system-prompt/assemble`. Prompt shaping now uses `ctx.systemPrompt.section()`, and compaction
+> providers are chosen in `cordis.yml`. Where this report suggests the `system-prompt/assemble`
+> waterfall as a place to add text, treat that as superseded by the official plugin guidance.
+
 Read-only research report. Every claim below is anchored to a file path and line number in the
 installed packages under:
 
@@ -935,8 +940,9 @@ These are contract mismatches found while reading the repo against the DSH contr
 DSH 0.2.1-rc.2's `SystemPrompt` has **no `.register`**, so this returns `undefined` and the
 prompt-cache stabilization block at `src/index.ts:246-261` **never runs**. The intended
 transformation API (`stabilizeForCache` returning `{ reordered, cacheableRatio, sections }`) has
-no DSH counterpart — DSH's `system-prompt/assemble` waterfall would be the hook point, or
-`ctx.systemPrompt.section({ name, order, text })` for adding a section.
+no DSH counterpart — the supported way to contribute text is
+`ctx.systemPrompt.section({ name, order, text })`; do not use the `system-prompt/assemble`
+waterfall to add text.
 
 ### 10.2 `scope.registry.replace('compaction', engineImpl)` does not exist → silent no-op
 

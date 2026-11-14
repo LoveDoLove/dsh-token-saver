@@ -6,7 +6,7 @@
 
 **Trim oversized tool output to keep more of your DSH context window for the model.**
 
-A configurable token-efficiency plugin for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness). It shrinks file reads, grep dumps, and command logs before they enter the conversation, and adds optional context-pressure handling, prompt shaping, local responses, and LLM-summary compaction.
+A configurable token-efficiency plugin for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness). It shrinks file reads, grep dumps, and command logs before they enter the conversation, and adds optional context-pressure handling, prompt shaping, local responses, and an exported LLM-summary engine.
 
 [简体中文](README.zh-CN.md) · [Releases](https://github.com/LoveDoLove/dsh-token-saver/releases) · [Issues](https://github.com/LoveDoLove/dsh-token-saver/issues)
 
@@ -14,7 +14,7 @@ A configurable token-efficiency plugin for [DeepSeek Harness (DSH)](https://gith
 
 Tool output is the fastest way to fill a context window. A single file read or `grep` dump can add tens of thousands of bytes to a session, most of which the model never needed — and the tokens stay in the conversation for every later turn.
 
-DSH Token Saver intercepts that output at the DSH tool-execution boundary: it keeps the head and tail of long results, folds grep output down to its matches, and compacts structured command output through RTK. Everything is configurable, and the extras (prompt shaping, RTK, local responses, LLM summaries) are off by default.
+DSH Token Saver intercepts that output at the DSH tool-execution boundary: it keeps the head and tail of long results, folds grep output down to its matches, and compacts structured command output through RTK. Everything is configurable, and the extras (prompt shaping, RTK, local responses) are off by default.
 
 **Quick install.** Run `dsh plugin --profile web add github:LoveDoLove/dsh-token-saver`. See [Install](#install) for pinned releases and build-script approval.
 
@@ -29,8 +29,8 @@ DSH Token Saver intercepts that output at the DSH tool-execution boundary: it ke
 | Caveman prompt shaping | Uses a configurable terse prompt style | Off |
 | Ponytail prompt shaping | Applies a minimal-change task-solving style | Off |
 | Local responses | Answers supported probe shapes locally without an LLM call | Off |
-| LLM-summary compaction | Optionally uses an LLM summary for compaction | Off (only effective in `balanced`/`aggressive`) |
-| Prompt-cache stability | Stabilizes system-prompt section ordering | Applies in every mode except `off` |
+| LLM-summary engine | Exported engine class for hosts that select a compaction provider | Not applied automatically |
+| Prompt shaping | Adds Caveman/Ponytail text as a DSH system-prompt section | Off |
 | Web settings | Configure the plugin from **Settings → Token Saver** | Available on DSH Web |
 
 ## Install
@@ -82,8 +82,8 @@ DSH Token Saver hooks into the DSH tool-execution pipeline:
 
 1. **Post-execute hook** — after a tool returns, oversized output is trimmed to head + tail or folded (grep results keep their matches; RTK compacts structured command output).
 2. **Context-pressure handling** — when context pressure crosses the threshold, higher modes can trigger compaction before the next step.
-3. **LLM-summary compaction** — in `balanced`/`aggressive` mode, an optional LLM summary can replace bulky output (requires a configured `callLlm` provider).
-4. **Prompt-cache stability** — system-prompt sections are reordered so pinned, cacheable sections stay stable across turns.
+3. **Prompt shaping** — Caveman and Ponytail text is registered as a system-prompt section, never by rewriting the frozen agent-loop request.
+4. **Local responses** — supported probe shapes are answered without calling the model.
 
 All paths are fail-open: if an optimization errors, the original content is preserved unchanged.
 
@@ -114,17 +114,17 @@ dsh-token-saver:
 | `grepMaxMatches` / `grepContextLines` | `30` / `2` | Matches kept when folding a grep result, and the context lines kept around each match. |
 | `grepHeadBytes` / `grepTailBytes` | `8192` / `4096` | Byte budget for the folded grep result. |
 | `pressureThreshold` | `0.5` | Context-pressure ratio above which higher modes may compact. |
-| `llmSummaryEnabled` | `false` | Only effective in `balanced` or `aggressive` mode, and only when a `callLlm` provider is wired in. |
-| `replaceBasicCompaction` | `true` in `aggressive` | Replaces DSH's built-in compaction provider with the LLM-summary engine. |
+| `llmSummaryEnabled` | `false` | Retained for API compatibility; summary compaction is not wired into DSH's provider-selected compaction seam. |
+| `replaceBasicCompaction` | `true` in `aggressive` | Logs a warning instead of replacing a provider: compaction providers are chosen in `cordis.yml`. |
 | `includeToolNames` / `excludeToolNames` | `[]` | Restrict trimming to specific tools, or skip specific tools. |
-| `cacheStableSections` | `[]` | System-prompt section ids to pin first, so they stay in a stable position for prompt caching. |
+| `cacheStableSections` | `[]` | Retained for API compatibility; the stabilization helper is exported but not applied automatically. |
 
 ### Modes
 
 - **off** — disables token-saving transformations. (RTK still runs when `rtkEnabled: true`.)
 - **conservative** — trims/folds oversized tool output while retaining the normal DSH compaction path.
 - **balanced** — enables additional context-pressure handling.
-- **aggressive** — enables more extensive compaction behavior (including replacing the basic compaction provider by default); review the configuration before enabling it.
+- **aggressive** — enables more extensive trimming and prompt shaping; review the configuration before enabling it.
 
 Exact behavior depends on the individual options and the installed DSH version. Check the settings panel and configuration defaults for the current build.
 
@@ -145,7 +145,7 @@ The same tool output can be compacted twice — once by the post-execute hook an
 
 - **Fail open:** if an optimization fails or produces an unusable result, the original content is preserved.
 - **Error output is preserved:** tool results marked as errors are not compacted by the tool-output filter.
-- **Opt-in extras:** RTK, prompt shaping, local responses, and LLM-summary compaction are independently configurable.
+- **Opt-in extras:** RTK, prompt shaping, and local responses are independently configurable.
 - **No quality guarantee:** token reduction can change the information visible to a model. Review settings carefully, especially for aggressive compaction.
 
 ## Benchmark

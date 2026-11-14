@@ -31,6 +31,8 @@ function checkEntrypoints() {
 
   const check = (label, target) => {
     if (typeof target !== 'string') return
+    // Wildcard exports describe a family, not one emitted file.
+    if (target.includes('*')) return
     if (!fs.existsSync(path.join(root, target))) missing.push(`${label} -> ${target}`)
   }
 
@@ -127,5 +129,64 @@ function checkBuildComplete() {
   return true
 }
 
-const ok = checkEntrypoints() && checkBuildComplete() && checkFiltersRegistered()
+/**
+ * The Plugin Manager reads display metadata without activating the plugin:
+ * `<specifier>/locale/en.json` supplies `meta.title` / `meta.description`, and
+ * `<specifier>/icon` (or the package-root `icon` field) supplies the icon.
+ * These resources must be exported, packed, and valid, or the plugin installs
+ * but shows up unnamed and iconless.
+ */
+function checkDisplayResources() {
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+  const problems = []
+
+  const localeDir = path.join(root, 'locale')
+  if (!fs.existsSync(localeDir)) {
+    problems.push('locale/ directory is missing')
+  } else {
+    const files = fs.readdirSync(localeDir).filter((f) => f.endsWith('.json'))
+    if (!files.includes('en.json')) problems.push('locale/en.json is missing')
+    for (const file of files) {
+      const data = JSON.parse(fs.readFileSync(path.join(localeDir, file), 'utf8'))
+      for (const key of ['title', 'description']) {
+        const value = data?.meta?.[key]
+        if (typeof value !== 'string' || value.trim() === '') {
+          problems.push(`locale/${file}: meta.${key} must be a non-empty string`)
+        }
+      }
+    }
+  }
+
+  const icon = typeof pkg.icon === 'string' ? pkg.icon : 'icon.svg'
+  const iconPath = path.join(root, icon)
+  if (!fs.existsSync(iconPath)) {
+    problems.push(`icon file is missing: ${icon}`)
+  } else {
+    if (!/\.(svg|png|jpe?g|webp)$/i.test(icon)) problems.push(`icon must be SVG/PNG/JPEG/WebP: ${icon}`)
+    if (fs.statSync(iconPath).size > 256 * 1024) problems.push(`icon exceeds 256 KiB: ${icon}`)
+  }
+
+  const exports = pkg.exports ?? {}
+  if (!Object.keys(exports).some((key) => key.startsWith('./locale/'))) {
+    problems.push('package.json exports must expose ./locale/*.json')
+  }
+  if (typeof pkg.icon !== 'string' && !Object.keys(exports).includes('./icon')) {
+    problems.push('package.json must export ./icon when no top-level icon field is set')
+  }
+
+  const files = new Set(pkg.files ?? [])
+  for (const required of ['lib', 'client.js', 'cordis.patch.yml', 'locale', icon.replace(/^\.\//, '')]) {
+    if (!files.has(required)) problems.push(`files must include ${required}`)
+  }
+
+  if (problems.length > 0) {
+    console.error('Display resources are incomplete:')
+    for (const p of problems) console.error(`  ${p}`)
+    return false
+  }
+  console.log('Display resources (locale metadata, icon, exports, files) are complete.')
+  return true
+}
+
+const ok = checkEntrypoints() && checkBuildComplete() && checkFiltersRegistered() && checkDisplayResources()
 process.exit(ok ? 0 : 1)

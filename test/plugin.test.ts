@@ -7,9 +7,28 @@ import type { GenerateOptionsLike, StreamChunkLike, ToolExecutionLike, ToolResul
 function createScope() {
   const listeners = new Map<string, Array<(...args: readonly unknown[]) => unknown>>()
   const effects: Array<() => void> = []
+  const sections: Array<{
+    name: string
+    order: number
+    text: string | (() => string)
+    interpolate?: boolean
+  }> = []
+  const scoped = {
+    systemPrompt: {
+      section: vi.fn((section: (typeof sections)[number]) => {
+        sections.push(section)
+        return () => {}
+      }),
+    },
+    effect: vi.fn((action: () => void | (() => void)) => {
+      const disposer = action()
+      if (typeof disposer === 'function') effects.push(disposer)
+    }),
+  }
   return {
     listeners,
     effects,
+    sections,
     on: vi.fn((event: string, listener: (...args: readonly unknown[]) => unknown) => {
       if (!listeners.has(event)) listeners.set(event, [])
       listeners.get(event)!.push(listener)
@@ -20,6 +39,9 @@ function createScope() {
         effects.push(disposer)
       }
     }),
+    inject: vi.fn((_deps: readonly string[], callback: (s: typeof scoped) => void) => {
+      callback(scoped)
+    }),
     get: vi.fn((key: string) => {
       if (key === 'compaction') return { stub: true }
       if (key === 'tokenMeter') return undefined
@@ -28,7 +50,6 @@ function createScope() {
       if (key === 'sessions') return undefined
       return undefined
     }),
-    registry: { register: vi.fn(), replace: vi.fn() },
   }
 }
 
@@ -56,6 +77,12 @@ describe('plugin entry & Cordis registration', () => {
     expect(empty).toEqual({})
 
     expect(() => cordisResolveConfig(plugin as never, 'not-an-object')).toThrow(ValidationError)
+  })
+
+  it('fails loudly on an invalid config value', () => {
+    expect(() => cordisResolveConfig(plugin as never, { mode: 'reckless' })).toThrow(ValidationError)
+    expect(() => cordisResolveConfig(plugin as never, { cavemanLevel: 'nope' })).toThrow(ValidationError)
+    expect(() => cordisResolveConfig(plugin as never, { headBytes: -1 })).toThrow(ValidationError)
   })
 
   it('initializes and activates cleanly inside a Cordis Context', async () => {
@@ -102,20 +129,32 @@ describe('plugin entry & Cordis registration', () => {
     }
   })
 
-  it('does not replace compaction in conservative mode', async () => {
+  it('does not warn about compaction in conservative mode', async () => {
     const scope = createScope()
-    await apply(scope, { mode: 'conservative' })
-    expect(scope.registry.replace).not.toHaveBeenCalled()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await apply(scope, { mode: 'conservative' })
+      expect(warn.mock.calls.some((args) => args.map(String).join(' ').includes('replaceBasicCompaction'))).toBe(false)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
-  it('replaces compaction in aggressive mode when replaceBasicCompaction=true', async () => {
+  it('warns instead of mutating ctx.compaction when replaceBasicCompaction=true', async () => {
     const scope = createScope()
-    await apply(scope, {
-      mode: 'aggressive',
-      replaceBasicCompaction: true,
-      llmSummaryEnabled: true,
-    })
-    expect(scope.registry.replace).toHaveBeenCalledWith('compaction', expect.anything())
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await apply(scope, {
+        mode: 'aggressive',
+        replaceBasicCompaction: true,
+        llmSummaryEnabled: true,
+      })
+      expect(warn.mock.calls.some((args) => args.map(String).join(' ').includes('replaceBasicCompaction'))).toBe(true)
+      // The compaction seam is provider-owned; this plugin must not swap it.
+      expect(scope.get('compaction')).toEqual({ stub: true })
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
 
@@ -189,13 +228,35 @@ describe('plugin global hooks execution', () => {
     expect(chunks.some(c => c.type === 'text-delta' && c.delta === 'from-upstream')).toBe(true)
   })
 
-  it('injects prompt shaping into system prompt in llm/stream waterfall', async () => {
+  it('registers prompt shaping as a system-prompt section', async () => {
     const scope = createScope()
     await apply(scope, {
       mode: 'conservative',
       cavemanLevel: 'lite',
       ponytailLevel: 'full',
     })
+
+    const section = scope.sections.find((s) => s.name === 'token-saver:prompt-shaping')
+    expect(section).toBeDefined()
+    expect(section?.order).toBe(9500)
+    expect(section?.interpolate).toBe(false)
+
+    const text = typeof section?.text === 'function' ? section.text() : section?.text
+    expect(text).toContain('Never simplify away: input validation at trust boundaries')
+  })
+
+  it('emits no shaping text when both levels are off', async () => {
+    const scope = createScope()
+    await apply(scope, { mode: 'conservative' })
+
+    const section = scope.sections.find((s) => s.name === 'token-saver:prompt-shaping')
+    const text = typeof section?.text === 'function' ? section.text() : section?.text
+    expect(text).toBe('')
+  })
+
+  it('passes llm/stream options through untouched', async () => {
+    const scope = createScope()
+    await apply(scope, { mode: 'conservative', cavemanLevel: 'lite' })
 
     const streamListener = scope.listeners.get('llm/stream')?.[0] as (
       opts: GenerateOptionsLike,
@@ -206,24 +267,23 @@ describe('plugin global hooks execution', () => {
       system: 'Base system prompt.',
       messages: [{ role: 'user', content: 'Hello' }],
     }
+    const frozen = Object.freeze(opts)
 
     async function* dummyNext() {
       yield { type: 'finish', reason: 'stop' } as StreamChunkLike
     }
     const nextMock = vi.fn(dummyNext)
 
-    const stream = streamListener(opts, nextMock)
+    const stream = streamListener(frozen, nextMock)
     for await (const _ of stream) {
       // consume
     }
 
     expect(nextMock).toHaveBeenCalled()
-    expect(opts.system).toContain('Base system prompt.')
-    expect(opts.system).toContain('<!-- dsh-token-saver:prompt-shaping -->')
-    expect(opts.system).toContain('Never simplify away: input validation at trust boundaries')
+    expect(opts.system).toBe('Base system prompt.')
   })
 
-  it('fails open in llm/stream if shaping throws', async () => {
+  it('fails open in llm/stream for a null options object', async () => {
     const scope = createScope()
     await apply(scope, { mode: 'conservative' })
 
@@ -237,7 +297,6 @@ describe('plugin global hooks execution', () => {
     }
     const nextMock = vi.fn(dummyNext)
 
-    // Pass invalid options object to trigger safe handling
     const stream = streamListener(null as never, nextMock)
     for await (const _ of stream) {
       // consume

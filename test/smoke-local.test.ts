@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { apply } from '../src/index.ts'
 import { resolveConfig } from '../src/config'
 import type { PostToolDecision, PreStepDecisionLike } from '../src/types'
@@ -8,13 +8,19 @@ interface MockScope {
   effects: Array<() => void>
   compactionEngine: { callsToCompactIfNeeded: number; lastTrigger?: string }
   sessionEvents: Map<string, Array<{ type: string; content?: string }>>
-  systemPromptRegistrations: Array<(input: unknown) => unknown>
+  systemPromptSections: Array<{
+    name: string
+    order: number
+    text: string | (() => string)
+    interpolate?: boolean
+  }>
   replacedKeys: Array<string>
   tokenMeter: Map<string, { current: number; capacity: number; pressure: number }>
   foldTelemetry: Array<{ toolName?: string; originalBytes: number; trimmedBytes: number }>
   compactTelemetry: Array<{ trigger: string; engine: string }>
   on(event: string, listener: (...args: readonly unknown[]) => unknown): void
   effect(fn: () => void): void
+  inject(deps: readonly string[], callback: (scoped: unknown) => void): void
   get(key: string): unknown
 }
 
@@ -23,7 +29,7 @@ function createScope(): MockScope {
   const effects: Array<() => void> = []
   const tokenMeter = new Map<string, { current: number; capacity: number; pressure: number }>()
   const sessionEvents = new Map<string, Array<{ type: string; content?: string }>>()
-  const systemPromptRegistrations: Array<(input: unknown) => unknown> = []
+  const systemPromptSections: MockScope['systemPromptSections'] = []
   const replacedKeys: Array<string> = []
   const foldTelemetry: Array<{ toolName?: string; originalBytes: number; trimmedBytes: number }> = []
   const compactTelemetry: Array<{ trigger: string; engine: string }> = []
@@ -34,7 +40,7 @@ function createScope(): MockScope {
     tokenMeter,
     compactionEngine,
     sessionEvents,
-    systemPromptRegistrations,
+    systemPromptSections,
     replacedKeys,
     foldTelemetry,
     compactTelemetry,
@@ -44,6 +50,15 @@ function createScope(): MockScope {
     },
     effect(fn) {
       effects.push(fn)
+    },
+    inject(_deps, callback) {
+      callback({
+        systemPrompt: scope.get('systemPrompt'),
+        effect: (fn: () => void | (() => void)) => {
+          const disposer = fn()
+          if (typeof disposer === 'function') effects.push(disposer)
+        },
+      })
     },
     get(key) {
       if (key === 'tokenMeter') {
@@ -75,24 +90,13 @@ function createScope(): MockScope {
       }
       if (key === 'systemPrompt') {
         return {
-          register: (fn: (input: unknown) => unknown) => {
-            systemPromptRegistrations.push(fn)
+          section: (section: MockScope['systemPromptSections'][number]) => {
+            systemPromptSections.push(section)
+            return () => {}
           },
         }
       }
       return undefined
-    },
-  }
-  ;(scope as unknown as { registry: { replace(k: string, v: unknown): void; register(k: string, v: unknown): void } }).registry = {
-    replace(k, v) {
-      replacedKeys.push(k)
-      if (k === 'compaction') {
-        const orig = scope.get.bind(scope)
-        scope.get = ((key: string) => key === 'compaction' ? v : orig(key)) as typeof scope.get
-      }
-    },
-    register(k) {
-      replacedKeys.push(k)
     },
   }
   return scope
@@ -184,10 +188,16 @@ describe('local smoke — full dsh event flow with mock scope', () => {
     expect(scope.compactionEngine.callsToCompactIfNeeded).toBe(0)
   })
 
-  it('aggressive mode replaces the compaction engine via scope.registry', async () => {
+  it('aggressive mode warns instead of replacing the compaction engine', async () => {
     const scope = createScope()
-    await apply(scope, resolveConfig({ mode: 'aggressive', llmSummaryEnabled: true, replaceBasicCompaction: true }))
-    expect(scope.replacedKeys).toContain('compaction')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await apply(scope, resolveConfig({ mode: 'aggressive', llmSummaryEnabled: true, replaceBasicCompaction: true }))
+      expect(scope.replacedKeys).toEqual([])
+      expect(warn.mock.calls.some((args) => args.map(String).join(' ').includes('replaceBasicCompaction'))).toBe(true)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('conservative mode never replaces the compaction engine', async () => {
@@ -196,17 +206,15 @@ describe('local smoke — full dsh event flow with mock scope', () => {
     expect(scope.replacedKeys.length).toBe(0)
   })
 
-  it('systemPrompt register is called when systemPrompt service is exposed', async () => {
+  it('registers prompt shaping as a system-prompt section', async () => {
     const scope = createScope()
-    await apply(scope, resolveConfig({ mode: 'conservative' }))
-    expect(scope.systemPromptRegistrations.length).toBe(1)
-    const reordered = scope.systemPromptRegistrations[0]!([
-      { id: 'noise', content: ['time now'], position: 0, cacheable: false },
-      { id: 'tool-list', content: ['tools'], position: 1, cacheable: true },
-      { id: 'identity', content: ['who'], position: 2, cacheable: true },
-    ])
-    const reorderedArr = reordered as Array<{ id: string }>
-    expect(reorderedArr[reorderedArr.length - 1]?.id).toBe('noise')
+    await apply(scope, resolveConfig({ mode: 'conservative', cavemanLevel: 'lite', ponytailLevel: 'full' }))
+    expect(scope.systemPromptSections.length).toBe(1)
+    const section = scope.systemPromptSections[0]!
+    expect(section.name).toBe('token-saver:prompt-shaping')
+    expect(section.order).toBe(9500)
+    const text = typeof section.text === 'function' ? section.text() : section.text
+    expect(text).toContain('Never simplify away: input validation at trust boundaries')
   })
 
   it('excludes tools in excludeToolNames even when content is large', async () => {

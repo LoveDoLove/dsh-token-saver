@@ -126,8 +126,94 @@ export function resolveConfig(input: TokenSaverConfig | undefined): ResolvedConf
   }
 }
 
-export interface StandardSchemaV1Props<Input = unknown, Output = Input> {
-  readonly version: 1
+interface ConfigIssue {
+  readonly message: string
+  readonly path?: ReadonlyArray<PropertyKey>
+}
+
+function validateConfigShape(cfg: TokenSaverConfig | undefined): ConfigIssue[] {
+  if (!cfg) return []
+  const issues: ConfigIssue[] = []
+  const checkEnum = (key: keyof TokenSaverConfig, valid: readonly string[]) => {
+    const value = cfg[key]
+    if (value === undefined) return
+    if (typeof value !== 'string' || !valid.includes(value)) {
+      issues.push({ message: `${key} must be one of: ${valid.join(', ')}`, path: [key] })
+    }
+  }
+  const checkBoolean = (key: keyof TokenSaverConfig) => {
+    const value = cfg[key]
+    if (value !== undefined && typeof value !== 'boolean') {
+      issues.push({ message: `${key} must be a boolean`, path: [key] })
+    }
+  }
+  const checkNumber = (key: keyof TokenSaverConfig) => {
+    const value = cfg[key]
+    if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
+      issues.push({ message: `${key} must be a non-negative finite number`, path: [key] })
+    }
+  }
+  const checkString = (key: keyof TokenSaverConfig) => {
+    const value = cfg[key]
+    if (value !== undefined && typeof value !== 'string') {
+      issues.push({ message: `${key} must be a string`, path: [key] })
+    }
+  }
+  const checkStringArray = (key: keyof TokenSaverConfig) => {
+    const value = cfg[key]
+    if (value === undefined) return
+    if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+      issues.push({ message: `${key} must be an array of strings`, path: [key] })
+    }
+  }
+
+  checkEnum('mode', VALID_MODES)
+  checkEnum('cavemanLevel', VALID_CAVEMAN_LEVELS)
+  checkEnum('ponytailLevel', VALID_PONYTAIL_LEVELS)
+  checkBoolean('preserveStructure')
+  checkBoolean('llmSummaryEnabled')
+  checkBoolean('replaceBasicCompaction')
+  checkBoolean('rtkEnabled')
+  checkBoolean('localResponsesEnabled')
+  for (const key of [
+    'headBytes',
+    'tailBytes',
+    'grepMaxMatches',
+    'grepContextLines',
+    'grepHeadBytes',
+    'grepTailBytes',
+    'pressureThreshold',
+    'compactPressureThreshold',
+    'llmSummaryMaxInputTokens',
+  ] as const) {
+    checkNumber(key)
+  }
+  checkString('llmSummaryPrompt')
+  checkStringArray('includeToolNames')
+  checkStringArray('excludeToolNames')
+  checkStringArray('cacheStableSections')
+
+  const local = cfg.localResponses
+  if (local !== undefined) {
+    if (Array.isArray(local)) {
+      const bad = local.filter((kind) => !VALID_LOCAL_KINDS.includes(kind))
+      if (bad.length > 0) {
+        issues.push({
+          message: `localResponses contains unknown kinds: ${bad.join(', ')}`,
+          path: ['localResponses'],
+        })
+      }
+    } else if (typeof local !== 'object' || local === null) {
+      issues.push({
+        message: 'localResponses must be an array of kinds or a record of booleans',
+        path: ['localResponses'],
+      })
+    }
+  }
+  return issues
+}
+
+export interface StandardSchemaV1Props<Input = unknown, Output = Input> {  readonly version: 1
   readonly vendor: string
   readonly validate: (
     value: unknown,
@@ -158,6 +244,8 @@ export const TokenSaverSchema: ConfigDescriptor = {
           ],
         }
       }
+      const issues = validateConfigShape(input as TokenSaverConfig | undefined)
+      if (issues.length > 0) return { issues }
       const validated = (!input || typeof input !== 'object') ? {} : (input as TokenSaverConfig)
       return { value: validated }
     },

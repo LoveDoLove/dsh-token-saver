@@ -2,17 +2,11 @@ import { resolveConfig, TokenSaverSchema, DEFAULTS } from './config.js'
 import type { ResolvedConfig, TokenSaverConfig } from './internal.js'
 import { decidePostTool } from './strategies/tool-result-trim.js'
 import { decidePreStep } from './strategies/context-pressure.js'
-import { stabilizeForCache } from './strategies/prompt-cache.js'
-import { LlmSummaryCompactionEngine, DEFAULT_COMPACTION_PROMPT } from './strategies/llm-summary.js'
-import { createRtkStats, compressMessages, mergeRtkStats, type RtkStats } from './rtk/index.js'
+import { createRtkStats, mergeRtkStats, type RtkStats } from './rtk/index.js'
 import { SettingsManager } from './settings.js'
 import { StatsStore } from './stats-store.js'
 import { createApiRoutes } from './routes.js'
-import {
-  activePrompts,
-  injectSystem,
-} from './prompt-shaping/index.js'
-import { createAssembleInjector } from './prompt-shaping/assemble.js'
+import { activePrompts } from './prompt-shaping/index.js'
 import {
   detectOptimization,
   createLocalResponseStream,
@@ -52,6 +46,10 @@ export interface CordisScope {
   effect(disposer: () => void): void
   get(key: string): unknown
   effectDispose(): void
+  inject?(
+    dependencies: readonly string[],
+    callback: (scoped: CordisScope & Record<string, unknown>) => void,
+  ): unknown
 }
 
 export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void> {
@@ -68,8 +66,6 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
   const tokenMeter = makeTokenMeterAccessor(scope)
   const compactionEngine = makeCompactionAccessor(scope)
   const agentForSession = makeAgentAccessor(scope)
-  const callLlm = makeLlmCaller(resolved, ownLogger)
-  const sessionEventsProvider = makeSessionEventsAccessor(scope)
   // Two views of the same figures: `rtkStats` accumulates this process's
   // compression, `statsStore` persists the historical totals across restarts.
   const rtkStats: RtkStats = createRtkStats()
@@ -100,22 +96,6 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
         ownLogger.info('token-saver: web API mounted at /api/token-saver')
       }
     })
-  } else if ((scope as any).webServer) {
-    const server = (scope as any).webServer
-    if (server && typeof server.register === 'function') {
-      const apiHandler = createApiRoutes({
-        getSaver: () => settingsManager.getPublicTokenSaver(runtimeState),
-        setSaver: patch => settingsManager.updateTokenSaver(runtimeState, patch),
-        getLocal: () => settingsManager.getPublicLocalOptimize(runtimeState),
-        setLocal: patch => settingsManager.updateLocalOptimize(runtimeState, patch),
-      })
-      server.register({
-        kind: 'prefix',
-        path: '/api/token-saver',
-        handler: apiHandler,
-      })
-      ownLogger.info('token-saver: web API mounted at /api/token-saver')
-    }
   }
 
   // 1) Tool result trimming + RTK filter hook
@@ -176,40 +156,63 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
   scope.on('tools/post-execute', trimmedListener)
   scope.on('agent/pre-step', preStepListener)
 
-  // 2b) Prompt shaping through the DSH `system-prompt/assemble` waterfall.
+  // 2b) Prompt shaping through the supported `ctx.systemPrompt.section()` API.
   //
-  // The `llm/stream` request is deep-frozen by the agent loop, so the system
-  // prompt cannot be mutated there. DSH builds the model-facing system prompt
-  // from ordered sections, and the `system-prompt/assemble` waterfall lets a
-  // plugin contribute a section — the returned assembly is authoritative.
-  //
-  // The listener is registered unconditionally: it resolves the prompt text on
-  // every assembly, so enabling or disabling Caveman/Ponytail at runtime takes
-  // effect on the next model step without reloading the plugin.
-  scope.on(
-    'system-prompt/assemble',
-    createAssembleInjector(
-      () => {
-        if (!runtimeState.enabled) return ''
-        const cfg = runtimeState.config
-        if (cfg.cavemanLevel === 'off' && cfg.ponytailLevel === 'off') return ''
-        return activePrompts({
-          caveman: cfg.cavemanLevel,
-          ponytail: cfg.ponytailLevel,
-        })
-          .map((p) => p.text)
-          .join('\n\n')
-      },
-      // A shaped prompt saves no bytes at the moment it is injected, so it has
-      // its own counter: `promptCalls` is the only place a prompt-only step
-      // shows up in the dashboard.
-      () => {
-        statsStore.record(null, true)
-      },
-    ) as never,
-  )
+  // DSH builds the model-facing system prompt from ordered sections, and the
+  // official way for a plugin to contribute text is a registered section. The
+  // text provider is re-evaluated on every assembly, so enabling or disabling
+  // Caveman/Ponytail at runtime takes effect on the next model step without
+  // reloading the plugin.
+  if (typeof scope.inject === 'function') {
+    scope.inject(['systemPrompt'], (scoped) => {
+      const systemPrompt = scoped.systemPrompt as
+        | {
+            section?: (section: {
+              name: string
+              order: number
+              text: string | (() => string)
+              interpolate?: boolean
+            }) => (() => void) | undefined
+          }
+        | undefined
+      if (!systemPrompt || typeof systemPrompt.section !== 'function') return
 
-  // 3) Global LLM Stream hook: Local responses & Prompt shaping
+      const dispose = systemPrompt.section({
+        name: 'token-saver:prompt-shaping',
+        order: 9500,
+        // The shaping prompt is literal text, never a template: DSH must not
+        // try to resolve `{{…}}` references inside it.
+        interpolate: false,
+        text: () => {
+          if (!runtimeState.enabled) return ''
+          const cfg = runtimeState.config
+          if (cfg.cavemanLevel === 'off' && cfg.ponytailLevel === 'off') return ''
+          const text = activePrompts({
+            caveman: cfg.cavemanLevel,
+            ponytail: cfg.ponytailLevel,
+          })
+            .map((p) => p.text)
+            .join('\n\n')
+          // A shaped prompt saves no bytes at the moment it is injected, so it
+          // has its own counter: `promptCalls` is the only place a prompt-only
+          // step shows up in the dashboard.
+          if (text) statsStore.record(null, true)
+          return text
+        },
+      })
+      if (typeof dispose === 'function' && typeof scoped.effect === 'function') {
+        scoped.effect(() => () => dispose())
+      }
+    })
+  }
+
+  // 3) Global LLM Stream hook: local responses.
+  //
+  // The agent loop deep-freezes the request it hands to `llm/stream`, so a
+  // listener must treat `options` as read-only. Prompt shaping is delivered
+  // through `ctx.systemPrompt.section()` (above) and tool-result trimming
+  // through `tools/post-execute`; this hook only short-circuits well-known
+  // local requests with its own stream.
   const llmStreamListener = function (
     options: unknown,
     next: () => AsyncIterable<unknown>,
@@ -222,7 +225,6 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
       }
       const currentConfig = runtimeState.config
 
-      // A) Local responses (quota, prefix, title, suggestion, filepath)
       if (currentConfig.localResponsesEnabled && req) {
         const answer = detectOptimization(req, currentConfig.localResponses)
         if (answer !== null) {
@@ -243,47 +245,6 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
           return createLocalResponseStream(answer)
         }
       }
-
-      // B) Prompt shaping (Caveman & Ponytail)
-      //
-      // NOTE: the request handed to `llm/stream` is deep-frozen by the agent
-      // loop, so it cannot be mutated in place on the real agent path. The
-      // shaping prompt therefore reaches the model through the
-      // `system-prompt/assemble` waterfall (registered above), which is where
-      // DSH builds the model-facing system prompt.
-      //
-      // The in-place path is kept for callers that hand over a mutable
-      // payload. It is dedup-guarded: when the rendered system prompt already
-      // carries the marker (the normal DSH case), this is a no-op.
-      if (currentConfig.cavemanLevel !== 'off' || currentConfig.ponytailLevel !== 'off') {
-        const active = activePrompts({
-          caveman: currentConfig.cavemanLevel,
-          ponytail: currentConfig.ponytailLevel,
-        })
-        if (active.length > 0 && req) {
-          const promptText = active.map((p) => p.text).join('\n\n')
-          try {
-            injectSystem(req, undefined, promptText)
-          } catch {
-            // Frozen/readonly options: skip injection, fail open.
-          }
-        }
-      }
-
-      // C) In-flight request tool message compaction (RTK)
-      if (currentConfig.rtkEnabled && req) {
-        try {
-          // Only actual compression hits advance the shared stats; mergeRtkStats
-          // ignores no-op results, so uncompressed requests add nothing.
-          const streamStats = compressMessages(req, { enabled: true })
-          mergeRtkStats(rtkStats, streamStats)
-          // Persist the same invocation exactly once; `streamStats` is this
-          // request's own accumulator, never the shared one.
-          statsStore.record(streamStats)
-        } catch {
-          // Frozen/readonly options: skip, fail open.
-        }
-      }
     } catch (err) {
       // Fail-open: log and let regular LLM handle the request
       ownLogger.warn(`token-saver: llm/stream hook error: ${(err as Error).message}`)
@@ -294,34 +255,14 @@ export async function apply(rawScope: unknown, rawConfig: unknown): Promise<void
 
   scope.on('llm/stream', llmStreamListener as unknown as (...args: readonly unknown[]) => unknown)
 
-  // 4) Prompt-cache layout stabilization
-  const systemPromptRegistry = makeSystemPromptRegistry(scope)
-  if (systemPromptRegistry) {
-    systemPromptRegistry.register((sections: unknown) => {
-      const arr = Array.isArray(sections) ? sections : []
-      const result = stabilizeForCache({
-        sections: arr as Parameters<typeof stabilizeForCache>[0]['sections'],
-        config: resolved,
-      })
-      if (result.reordered) {
-        ownLogger.debug(
-          `token-saver: prompt-cache stable reorder applied (cacheable=${result.cacheableRatio.toFixed(2)})`,
-        )
-      }
-      return result.sections
-    })
-  }
-
-  // 5) Optional LLM-summary compaction replacement
+  // 4) Compaction is a capability seam: a provider is chosen by a cordis.yml
+  // row, never replaced by mutating another plugin's service at runtime. The
+  // LLM-summary engine stays exported for programmatic use, but this plugin
+  // does not swap `ctx.compaction` out from under its owner.
   if (resolved.replaceBasicCompaction) {
-    const engineImpl = new LlmSummaryCompactionEngine({
-      config: resolved,
-      logger: ownLogger,
-      telemetry: resolved.telemetry,
-      callLlm,
-      sessionEventsProvider,
-    })
-    replaceCompactionProvider(scope, engineImpl, ownLogger)
+    ownLogger.warn(
+      'token-saver: replaceBasicCompaction is not applied — the compaction seam replaces providers through cordis.yml. Remove the option or load a compaction provider there.',
+    )
   }
 
   if (typeof scope.effect === 'function') {
@@ -433,70 +374,6 @@ function makeAgentAccessor(scope: CordisScope): (sessionId: string) => AgentLike
   }
 }
 
-function makeSessionEventsAccessor(scope: CordisScope): (session: AgentLike['session']) => readonly unknown[] {
-  const sessions = scope.get('sessions')
-  const obj = sessions as Record<string, unknown> | undefined
-  if (!obj || typeof obj.get !== 'function') {
-    return () => []
-  }
-  return (session) => {
-    const get = obj.get as (id: string) => unknown
-    const s = get(session.id)
-    if (!s || typeof s !== 'object') return []
-    const events = (s as { events?: () => readonly unknown[] }).events
-    return typeof events === 'function' ? events.call(s) : []
-  }
-}
-
-function makeSystemPromptRegistry(
-  scope: CordisScope,
-): { register: (fn: (sections: unknown) => unknown) => void } | undefined {
-  const sp = scope.get('systemPrompt')
-  if (!sp || typeof sp !== 'object') return undefined
-  if (typeof (sp as { register?: unknown }).register !== 'function') return undefined
-  return {
-    register: (fn) => {
-      ;(sp as { register: (f: typeof fn) => void }).register(fn)
-    },
-  }
-}
-
-function replaceCompactionProvider(
-  scope: CordisScope,
-  engineImpl: LlmSummaryCompactionEngine,
-  logger: Logger,
-): void {
-  const obj = scope as unknown as {
-    registry?: {
-      register?: (key: string, value: unknown) => void
-      replace?: (key: string, value: unknown) => void
-    }
-  }
-  const registry = obj.registry
-  if (!registry) {
-    logger.warn('token-saver: replaceBasicCompaction requested but no scope.registry; skipping replacement')
-    return
-  }
-  if (typeof registry.replace === 'function') {
-    registry.replace('compaction', engineImpl)
-  } else if (typeof registry.register === 'function') {
-    registry.register('compaction', engineImpl)
-  }
-  logger.warn('token-saver: replaceBasicCompaction=true is in effect; dsh-compaction-basic has been replaced.')
-}
-
-function makeLlmCaller(
-  _resolved: ResolvedConfig,
-  logger: Logger,
-): import('./strategies/llm-summary').LlmSummaryEngineDeps['callLlm'] {
-  return async (_input) => {
-    logger.warn(
-      'token-saver: LLM-summary called without an explicit callLlm provider; returning empty summary. Provide one via plugin apply options in dsh harness home.',
-    )
-    return { summary: [], shadowedTokenCount: 0 }
-  }
-}
-
 function createDefaultLogger(): Logger {
   const prefix = '[token-saver]'
   return {
@@ -507,16 +384,7 @@ function createDefaultLogger(): Logger {
   }
 }
 
-export const plugin = {
-  name,
-  Config,
-  inject,
-  apply,
-}
-
-export default plugin
-
-export { DEFAULT_COMPACTION_PROMPT, LlmSummaryCompactionEngine }
+export { DEFAULT_COMPACTION_PROMPT, LlmSummaryCompactionEngine } from './strategies/llm-summary.js'
 export { decidePostTool } from './strategies/tool-result-trim.js'
 export { decidePreStep } from './strategies/context-pressure.js'
 export { stabilizeForCache } from './strategies/prompt-cache.js'

@@ -101,7 +101,7 @@ describe('persisted savings telemetry', () => {
     expect(second.saved).toBe(first.saved * 2)
   })
 
-  it('records llm/stream compression into the persisted totals', async () => {
+  it('leaves llm/stream requests untouched and records no in-flight savings', async () => {
     const scope = createScope()
     await apply(scope, { mode: 'conservative', rtkEnabled: true })
 
@@ -115,10 +115,8 @@ describe('persisted savings telemetry', () => {
 
     listener(req, () => (async function* () {})())
 
-    const totals = readTotals(statsFile)
-    expect(totals.calls).toBe(1)
-    expect(totals.blocks).toBe(1)
-    expect(totals.saved).toBeGreaterThan(0)
+    // No fold happened, so nothing may be written to the persisted totals.
+    expect(fs.existsSync(statsFile)).toBe(false)
   })
 
   it('counts nothing when the folded result never reaches the model', async () => {

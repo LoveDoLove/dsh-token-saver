@@ -6,7 +6,7 @@
 
 **裁剪过大的工具输出，把更多上下文窗口留给模型。**
 
-面向 [DeepSeek Harness（DSH）](https://github.com/deepseek-ai/deepseek-harness) 的可配置 Token 优化插件。它在文件读取、grep 结果和命令日志进入对话之前压缩这些内容，并提供可选的上下文压力处理、提示词处理、本地响应和 LLM 摘要压缩。
+面向 [DeepSeek Harness（DSH）](https://github.com/deepseek-ai/deepseek-harness) 的可配置 Token 优化插件。它在文件读取、grep 结果和命令日志进入对话之前压缩这些内容，并提供可选的上下文压力处理、提示词塑形、本地响应和导出的 LLM 摘要引擎。
 
 [English](README.md) · [版本发布](https://github.com/LoveDoLove/dsh-token-saver/releases) · [问题反馈](https://github.com/LoveDoLove/dsh-token-saver/issues)
 
@@ -14,7 +14,7 @@
 
 工具输出是填满上下文窗口最快的方式。一次文件读取或一次 `grep` 输出就可能为会话增加数万字节，而其中大部分内容模型根本用不到 —— 并且这些 token 会在之后的每一轮中持续占用。
 
-DSH Token Saver 在 DSH 的工具执行边界拦截这些输出：对过长结果保留开头和结尾，把 grep 输出折叠为仅保留匹配项，并通过 RTK 压缩结构化命令输出。所有行为均可配置，额外功能（提示词处理、RTK、本地响应、LLM 摘要）默认关闭。
+DSH Token Saver 在 DSH 的工具执行边界拦截这些输出：对过长结果保留开头和结尾，把 grep 输出折叠为仅保留匹配项，并通过 RTK 压缩结构化命令输出。所有行为均可配置，额外功能（提示词塑形、RTK、本地响应）默认关闭。
 
 **快速安装。** 运行 `dsh plugin --profile web add github:LoveDoLove/dsh-token-saver`。指定版本安装与构建脚本授权见 [安装](#安装)。
 
@@ -29,8 +29,8 @@ DSH Token Saver 在 DSH 的工具执行边界拦截这些输出：对过长结�
 | Caveman 提示词处理 | 使用可配置的精简提示词风格 | 关闭 |
 | Ponytail 提示词处理 | 采用尽量小改动、完整解决任务的处理风格 | 关闭 |
 | 本地响应 | 对支持的探测请求直接返回结果，无需调用 LLM | 关闭 |
-| LLM 摘要压缩 | 可选使用 LLM 摘要进行上下文压缩 | 关闭（仅在 `balanced`/`aggressive` 模式下生效） |
-| Prompt Cache 稳定性 | 稳定系统提示词各部分的顺序 | 除 `off` 外的所有模式均生效 |
+| LLM 摘要引擎 | 导出的引擎类，供选择压缩 provider 的宿主使用 | 不自动应用 |
+| 提示词塑形 | 将 Caveman/Ponytail 文本注册为 DSH 系统提示词片段 | 关闭 |
 | Web 设置面板 | 在 **Settings → Token Saver** 中配置插件 | DSH Web 可用 |
 
 ## 安装
@@ -71,8 +71,8 @@ DSH Token Saver 接入 DSH 的工具执行流程：
 
 1. **Post-execute 钩子** — 工具返回后，过长的输出会被裁剪为保留开头和结尾；grep 结果会折叠为仅保留匹配项；RTK 可压缩结构化命令输出。
 2. **上下文压力处理** — 当上下文压力超过阈值时，更高模式可在下一步之前触发压缩。
-3. **LLM 摘要压缩** — 在 `balanced`/`aggressive` 模式下，可用 LLM 摘要替代冗长输出（需要配置 `callLlm` provider）。
-4. **Prompt Cache 稳定性** — 重新排序系统提示词各部分，使已固定的缓存片段在多轮之间保持稳定。
+3. **提示词塑形** — Caveman 与 Ponytail 文本作为系统提示词片段注册，绝不改写已冻结的 agent 循环请求。
+4. **本地响应** — 支持的探测形状无需调用模型即可回答。
 
 所有处理路径均为故障开放（fail-open）：任何优化出错时，原始内容都会被原样保留。
 
@@ -102,17 +102,17 @@ dsh-token-saver:
 | `grepMaxMatches` / `grepContextLines` | `30` / `2` | 折叠 grep 结果时保留的匹配数量，以及每个匹配前后保留的上下文行数。 |
 | `grepHeadBytes` / `grepTailBytes` | `8192` / `4096` | 折叠后 grep 结果的字节预算。 |
 | `pressureThreshold` | `0.5` | 上下文压力比例，超过该值时更高模式可触发压缩。 |
-| `llmSummaryEnabled` | `false` | 仅在 `balanced` 或 `aggressive` 模式下生效，且需要接入 `callLlm` provider。 |
-| `replaceBasicCompaction` | `aggressive` 下为 `true` | 用 LLM 摘要引擎替换 DSH 内置的压缩 provider。 |
+| `llmSummaryEnabled` | `false` | 为兼容 API 保留；摘要压缩未接入 DSH 由 provider 选择的压缩 seam。 |
+| `replaceBasicCompaction` | `aggressive` 下为 `true` | 只记录警告，不替换 provider：压缩 provider 在 `cordis.yml` 中选择。 |
 | `includeToolNames` / `excludeToolNames` | `[]` | 将裁剪限制在指定工具，或跳过指定工具。 |
-| `cacheStableSections` | `[]` | 需要固定在首位的系统提示词片段 id，使其在 Prompt Cache 中保持位置稳定。 |
+| `cacheStableSections` | `[]` | 为兼容 API 保留；稳定性辅助函数已导出但不会自动应用。 |
 
 ### 模式
 
 - **off**：关闭 Token 优化处理（`rtkEnabled: true` 时 RTK 仍会执行）。
 - **conservative**：裁剪或折叠过长的工具输出，同时保留 DSH 原有的常规压缩流程。
 - **balanced**：启用更多上下文压力处理。
-- **aggressive**：启用更积极的压缩行为（默认会替换基础压缩 provider）；使用前请检查相关配置。
+- **aggressive**：启用更积极的裁剪与提示词塑形；使用前请检查相关配置。
 
 实际行为取决于各项配置和当前安装的 DSH 版本。请以当前版本的设置面板和配置默认值为准。
 
@@ -133,7 +133,7 @@ Web 设置面板显示实时节省遥测数据，累计统计结果会持久化�
 
 - **失败时保留原内容：** 优化过程失败或结果不可用时，保留原始内容。
 - **保留错误输出：** 工具输出过滤器不会压缩被标记为错误的结果。
-- **额外功能可单独启用：** RTK、提示词处理、本地响应和 LLM 摘要压缩均可独立配置。
+- **额外功能可单独启用：** RTK、提示词塑形和本地响应均可独立配置。
 - **不保证任务质量完全不变：** Token 优化可能改变模型能看到的信息。尤其启用激进压缩前，应先审查设置。
 
 ## 基准测试

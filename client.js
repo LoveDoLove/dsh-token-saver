@@ -16,7 +16,7 @@
     const module = { exports: {} }
     const exports = module.exports
     const React = require('react')
-    const { useState, useEffect, useCallback, createElement: h } = React
+    const { useState, useEffect, useCallback, useRef, createElement: h } = React
 
     const NS = 'settings.tokenSaver'
     const inject = ['slots', 'locale']
@@ -157,6 +157,7 @@
 
       const CSS = `
 .dts_root {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -316,9 +317,9 @@
   margin-left: 8px;
 }
 .dts_toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
   padding: 10px 18px;
   border-radius: 8px;
   background: #1e293b;
@@ -329,16 +330,6 @@
   transition: opacity .2s ease;
 }
 `
-
-      function injectStyleOnce() {
-        if (typeof document === 'undefined') return
-        const ID = 'dsh-token-saver-styles'
-        if (document.getElementById(ID)) return
-        const style = document.createElement('style')
-        style.id = ID
-        style.textContent = CSS
-        document.head.appendChild(style)
-      }
 
       const API = (() => {
         try {
@@ -382,18 +373,6 @@
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
           ...(timeout === undefined ? {} : { timeout }),
         })
-
-      function showToast(title, body) {
-        if (typeof document === 'undefined') return
-        const el = document.createElement('div')
-        el.className = 'dts_toast'
-        el.textContent = title + (body ? `: ${body}` : '')
-        document.body.appendChild(el)
-        setTimeout(() => {
-          el.style.opacity = '0'
-          setTimeout(() => el.remove(), 250)
-        }, 2800)
-      }
 
       function Switch(props) {
         const { checked, onChange, disabled } = props
@@ -448,9 +427,23 @@
         const [loading, setLoading] = useState(true)
         const [error, setError] = useState('')
         const [busy, setBusy] = useState('')
+        const [toast, setToast] = useState(null)
+        const toastTimer = useRef(null)
+
+        const notify = useCallback((title, body) => {
+          setToast({ title, body })
+          if (toastTimer.current) clearTimeout(toastTimer.current)
+          toastTimer.current = setTimeout(() => setToast(null), 2800)
+        }, [])
+
+        useEffect(
+          () => () => {
+            if (toastTimer.current) clearTimeout(toastTimer.current)
+          },
+          [],
+        )
 
         useEffect(() => {
-          injectStyleOnce()
           let alive = true
           Promise.all([api('/token-saver'), api('/local-optimize')])
             .then(([s, l]) => {
@@ -477,10 +470,10 @@
                 ...ans.tokenSaver,
                 savings: prev?.savings ?? ans.tokenSaver?.savings,
               }))
-              showToast(t('saver.saved'), t('saver.savedBody'))
+              notify(t('saver.saved'), t('saver.savedBody'))
             })
             .catch((err) => {
-              showToast(t('saver.failed'), err.message || String(err))
+              notify(t('saver.failed'), err.message || String(err))
             })
             .finally(() => setBusy(''))
         }
@@ -490,10 +483,10 @@
           post('/local-optimize', patch)
             .then((ans) => {
               setLocal(ans.localOptimize)
-              showToast(t('saver.saved'), t('saver.savedBody'))
+              notify(t('saver.saved'), t('saver.savedBody'))
             })
             .catch((err) => {
-              showToast(t('saver.failed'), err.message || String(err))
+              notify(t('saver.failed'), err.message || String(err))
             })
             .finally(() => setBusy(''))
         }
@@ -763,6 +756,12 @@
               }),
             ),
           ),
+          toast &&
+            h(
+              'div',
+              { className: 'dts_toast', role: 'status', 'aria-live': 'polite' },
+              toast.title + (toast.body ? `: ${toast.body}` : ''),
+            ),
         )
       }
 

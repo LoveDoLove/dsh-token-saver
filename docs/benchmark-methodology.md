@@ -25,7 +25,7 @@ The counters below are the same ones the Web settings panel displays and the one
 | `blocks` | Text blocks that were actually compacted |
 | Saved ratio | `saved / bytesBefore`, shown as a percentage |
 
-The same tool output can be compacted twice, once by the `tools/post-execute` hook and again by the `llm/stream` path on the already-compacted text. `calls` therefore counts events, `blocks` counts compacted text, and `saved` stays exact because per-pass savings add up to the total.
+Each tool result is compacted once, in the `tools/post-execute` hook. The `llm/stream` path no longer rewrites requests (the agent-loop request is frozen), so `calls` counts one event per compacted tool result, `blocks` counts the text blocks it compacted, and `saved` is the sum of those reductions.
 
 ## Protocol
 
