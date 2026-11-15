@@ -3,8 +3,16 @@
  * Ported from dsh-our-free-model / open-sse/rtk under MIT license.
  */
 
-const HIT_RE = /^([^:\n\r]+):(\d+):(.*)$/
-const HYPHEN_RE = /^([^-\n\r]+)-(\d+)-(.*)$/
+/**
+ * A grep hit is `path:line:content`. The line must start at column 0 and the
+ * path must contain no parenthesis — otherwise a JS/Python stack frame
+ * (`    at foo (/app/src/a.js:10:5)`) parses as a hit and the filter rewrites
+ * the trace into `foo (/app/src/a.js (1 hit):` plus a bogus line number.
+ * Interior spaces stay legal: `rg` prints them for paths like `my dir/x.ts`.
+ * `-` last in each class so it is read as a literal, not a range.
+ */
+const HIT_RE = /^([^\s(\n\r][^:\n\r()]*):(\d+):(.*)$/
+const HYPHEN_RE = /^([^\s(\n\r][^\n\r()-]*)-(\d+)-(.*)$/
 
 export function isGrepHit(line: string): boolean {
   return HIT_RE.test(line)

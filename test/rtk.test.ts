@@ -17,6 +17,8 @@ import {
   table,
   mergeRtkStats,
   compressMessages,
+  isGrepHit,
+  splitGrepHit,
 } from '../src/rtk'
 import { decidePostTool } from '../src/strategies/tool-result-trim'
 import { resolveConfig } from '../src/config'
@@ -202,6 +204,27 @@ describe('RTK Engine Autodetection & Invariants', () => {
     expect(filter?.filterName).toBe('git-status')
   })
 
+  it('does not classify stack frames as grep hits (D3 regression)', () => {
+    // Regression: HIT_RE admitted any non-colon prefix, so `    at foo
+    // (/app/src/a.js:10:5)` parsed as file `    at foo (/app/src/a.js`,
+    // line 10, content `5)`. The grep filter then rewrote the trace into
+    // `foo (/app/src/a.js (1 hit):` plus a bogus line number.
+    expect(isGrepHit('    at foo (/app/src/a.js:10:5)')).toBe(false)
+    expect(isGrepHit('node:internal/process/task_queues:95:5')).toBe(false)
+    expect(isGrepHit('Traceback (most recent call last):')).toBe(false)
+    // Real hits, including paths that legitimately contain spaces.
+    expect(isGrepHit('src/foo.ts:12:const x = 1')).toBe(true)
+    expect(isGrepHit('my dir/weird name.ts:7:hit')).toBe(true)
+    expect(splitGrepHit('my dir/weird name.ts:7:hit')?.file).toBe('my dir/weird name.ts')
+
+    const stack =
+      'TypeError: boom\n' +
+      Array.from({ length: 40 }, (_, i) => `    at fn${i} (/app/src/m${i}.js:${10 + i}:5)`).join('\n')
+    expect(autoDetectFilter(stack)).toBeNull()
+    expect(grep(stack)).toBe(stack)
+    expect(compressText(stack).compressed).toBe(false)
+  })
+
   it('does not classify indented text as porcelain status', () => {
     // Regression: the XY test admitted a bare space, so every line indented by
     // four or more spaces (`'  '` at columns 0-1, `' '` at column 2) read as a
@@ -303,8 +326,14 @@ describe('RTK Engine Autodetection & Invariants', () => {
       'MIT',
     ].join('\n')
     expect(readme.length).toBeGreaterThan(100)
-    // Sanity: the detector alone would still misfire on this text.
-    expect(autoDetectFilter(readme)?.filterName).toBe('git-status')
+    // D2 regression: bare `## ` markdown headings must NOT select git-status.
+    // They are indistinguishable from a header-only `## main`, so detection
+    // requires a `...` upstream marker, a detached/no-commit marker, or real
+    // porcelain entries below.
+    expect(autoDetectFilter(readme)).toBeNull()
+    expect(autoDetectFilter('## main...origin/main\n M file.ts')?.filterName).toBe('git-status')
+    expect(autoDetectFilter('## main\n M file.ts\n?? other.ts')?.filterName).toBe('git-status')
+    expect(autoDetectFilter('## Usage\n\n- a\n- b\n- c')).toBeNull()
 
     const res = decidePostTool(
       {

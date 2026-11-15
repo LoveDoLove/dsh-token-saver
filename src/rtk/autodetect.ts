@@ -5,6 +5,7 @@
 
 import { DETECT_WINDOW, RTK_DIFF_MARKER } from './constants.js'
 import type { RtkFilterFn } from './applyFilter.js'
+import { isGrepHit } from './hitLine.js'
 import { gitDiff } from './filters/gitDiff.js'
 import { gitStatus } from './filters/gitStatus.js'
 import { gitLog } from './filters/gitLog.js'
@@ -34,11 +35,28 @@ export function isMostlyPorcelain(sampleLines: readonly string[]): boolean {
   if (sampleLines.length < 3) return false
   let porcelainCount = 0
   for (const line of sampleLines) {
-    if (line.length >= 3 && line[2] === ' ' && PORCELAIN_XY_RE.test(line.slice(0, 2))) {
-      porcelainCount++
-    }
+    if (isPorcelainLine(line)) porcelainCount++
   }
   return porcelainCount / sampleLines.length >= 0.5
+}
+
+function isPorcelainLine(line: string): boolean {
+  return line.length >= 3 && line[2] === ' ' && PORCELAIN_XY_RE.test(line.slice(0, 2))
+}
+
+/**
+ * Is this first line a real `git status` branch header, or a markdown `##`
+ * heading? A bare word (`## Usage`) is indistinguishable from an upstream-less
+ * `## main`, so the ambiguous case only counts when porcelain entries follow.
+ * Firing wrongly destroys a document; not firing costs a few uncompacted bytes
+ * on a clean tree.
+ */
+function isGitStatusHeader(lines: readonly string[]): boolean {
+  const header = lines.find((l) => l.startsWith('## '))
+  if (!header) return false
+  if (header.includes('...')) return true
+  if (/\(no branch\)|No commits yet/.test(header)) return true
+  return lines.some(isPorcelainLine)
 }
 
 const TABLE_HEADER =
@@ -90,7 +108,7 @@ export function autoDetectFilter(text: string): RtkFilterFn | null {
   }
 
   // 3. git status (standard prose/header)
-  if (/^## /m.test(window) || /^On branch /m.test(window)) {
+  if (/^On branch /m.test(window) || isGitStatusHeader(lines)) {
     return gitStatus
   }
 
@@ -117,10 +135,12 @@ export function autoDetectFilter(text: string): RtkFilterFn | null {
     return gitStatus
   }
 
-  // 6. grep/ripgrep hit lines (file:line:content)
+  // 6. grep/ripgrep hit lines (file:line:content). Shares the parser's own
+  // predicate, so detection can never select a filter that then finds nothing
+  // to group — notably stack frames, which only look like hits.
   let grepHits = 0
   for (const l of lines.slice(0, 20)) {
-    if (/^[^:\n\r]+:\d+:/.test(l)) grepHits++
+    if (isGrepHit(l)) grepHits++
   }
   if (grepHits >= 2) {
     return grep
