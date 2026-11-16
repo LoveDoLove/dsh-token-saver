@@ -67,6 +67,30 @@ describe('Prompt Shaping - Caveman & Ponytail', () => {
     const none = activePrompts({ caveman: 'off', ponytail: 'off' })
     expect(none.length).toBe(0)
   })
+
+  it('keeps the negation, number and comment-protection rail at every caveman level', () => {
+    for (const lvl of CAVEMAN_LEVELS) {
+      if (lvl === 'off') continue
+      const text = cavemanPrompt(lvl)!
+      // The upstream floors: never drop negation, numbers stay exact,
+      // existing comments are payload, diffs show changed lines only.
+      expect(text).toContain('Never drop or weaken negation')
+      expect(text).toContain('Numbers and units exact')
+      expect(text).toContain('Existing comments in files you edit are payload')
+      expect(text).toContain('changed lines plus 1-2 lines of context')
+      expect(text).toContain('Anything persisted outside chat')
+      expect(text).toContain('A sentence with two readings')
+    }
+  })
+
+  it('keeps the scope and root-cause rail at every ponytail level', () => {
+    for (const lvl of PONYTAIL_LEVELS) {
+      if (lvl === 'off') continue
+      const text = ponytailPrompt(lvl)!
+      expect(text).toContain('callers, tests, fixtures, config, exports')
+      expect(text).toContain('fix the root cause in the shared function once')
+    }
+  })
 })
 
 describe('Prompt Shaping - System Prompt Injection & Deduplication', () => {

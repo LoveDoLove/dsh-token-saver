@@ -10,7 +10,10 @@ and does not rewrite the agent-loop request.
 tokens while technical substance stays exact.
 
 **Ponytail** compresses the work. It applies a lazy-senior-developer policy:
-YAGNI, the smallest change, the simplest code that works.
+YAGNI, the smallest change, the simplest code that works. Laziness applies to the
+solution, never to the change: the model first lists every place the change must
+reach (callers, tests, fixtures, config, exports) and finishes all of them, and
+fixes a bug at its root cause in the shared function rather than at each caller.
 
 They are independent and can be enabled together. Their text is joined with a
 blank line in the order Caveman then Ponytail.
@@ -24,7 +27,7 @@ blank line in the order Caveman then Ponytail.
 | `full` | Terse fragments, articles and pleasantries dropped |
 | `ultra` | Telegraphic, maximum compression |
 | `wenyan-lite` | Semi-classical register, technical terms in English |
-| `wenyan` | Classical Chinese, 80-90% character reduction |
+| `wenyan` | Classical Chinese, fewer characters on screen |
 | `wenyan-ultra` | Extreme classical compression |
 
 | Ponytail | Behavior |
@@ -39,8 +42,15 @@ blank line in the order Caveman then Ponytail.
 Every level keeps the same safety rails:
 
 - Code blocks, file paths, commands, errors, and URLs stay exact.
-- Security warnings, irreversible-action confirmations, and multi-step ordered
-  sequences are written normally.
+- Negation (`not`/`never`/`no`/`none`/`only`/`except`, 不/非/勿/未/毋) and
+  conditional qualifiers are never dropped or weakened. Numbers and units stay
+  exact. A sentence with two readings is written out in full.
+- Code changes in chat show changed lines plus a little context, not the whole
+  file. Existing comments in edited files are payload and stay untouched.
+- Anything persisted outside chat (code, comments, commits, docs, issues, PRs,
+  tickets, memory files) is written in normal prose, never terse style.
+- Security warnings, irreversible-action confirmations, multi-step ordered
+  sequences, and questions or option lists are written normally.
 - No invented abbreviations. Standard acronyms are fine; symbol names, API
   names, and error strings stay verbatim.
 - The user's dominant language is preserved, except for the Wenyan levels.

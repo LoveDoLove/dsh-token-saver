@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
+import { CAVEMAN_LEVELS, PONYTAIL_LEVELS } from '../src/settings'
 
 describe('Client Plugin Registration Contract', () => {
   const rootDir = path.resolve(__dirname, '..')
@@ -100,6 +101,18 @@ describe('Client Plugin Registration Contract', () => {
     expect(localeRegistered['settings.tokenSaver']).toBeDefined()
     expect(localeRegistered['settings.tokenSaver'].zh['saver.tab']).toBe('Token 节省')
     expect(localeRegistered['settings.tokenSaver'].en['saver.tab']).toBe('Token Saver')
+
+    // Every declared level has a label in both locales, and no stale label lingers.
+    const zh = localeRegistered['settings.tokenSaver'].zh
+    const en = localeRegistered['settings.tokenSaver'].en
+    for (const level of [...CAVEMAN_LEVELS, ...PONYTAIL_LEVELS]) {
+      expect(zh, `zh label for ${level}`).toHaveProperty(`saver.level.${level}`)
+      expect(en, `en label for ${level}`).toHaveProperty(`saver.level.${level}`)
+    }
+    for (const stale of ['normal', 'hard', 'extreme']) {
+      expect(zh).not.toHaveProperty(`saver.level.${stale}`)
+      expect(en).not.toHaveProperty(`saver.level.${stale}`)
+    }
 
     // Verify slot registration
     expect(slotInjections['settings.section']).toBeDefined()
