@@ -88,7 +88,18 @@ describe('Prompt Shaping - Caveman & Ponytail', () => {
       if (lvl === 'off') continue
       const text = ponytailPrompt(lvl)!
       expect(text).toContain('callers, tests, fixtures, config, exports')
-      expect(text).toContain('fix the root cause in the shared function once')
+      expect(text).toContain('grep every caller of the function you touch')
+      expect(text).toContain('fix the root cause once in the shared code')
+      expect(text).toContain('keeps its error handling and validation')
+      expect(text).toContain('Keep the structure the codebase already has')
+      expect(text).toContain('shortest working diff wins, once you know everything it must touch')
+    }
+  })
+
+  it('keeps the already-in-this-codebase rung in the ponytail ladder', () => {
+    for (const lvl of PONYTAIL_LEVELS) {
+      if (lvl === 'off') continue
+      expect(ponytailPrompt(lvl)).toContain('Already in this codebase')
     }
   })
 })

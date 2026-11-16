@@ -11,9 +11,11 @@ tokens while technical substance stays exact.
 
 **Ponytail** compresses the work. It applies a lazy-senior-developer policy:
 YAGNI, the smallest change, the simplest code that works. Laziness applies to the
-solution, never to the change: the model first lists every place the change must
-reach (callers, tests, fixtures, config, exports) and finishes all of them, and
-fixes a bug at its root cause in the shared function rather than at each caller.
+solution, never to the change: the model first greps every caller of the function
+it touches, lists every place the change must reach (callers, tests, fixtures,
+config, exports), finishes all of them, and fixes a bug at its root cause once in
+the shared code rather than at each caller. Code that moves or merges keeps its
+error handling and validation, and the structure the codebase already has.
 
 They are independent and can be enabled together. Their text is joined with a
 blank line in the order Caveman then Ponytail.
