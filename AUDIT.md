@@ -1,6 +1,6 @@
 # dsh-token-saver 审计报告
 
-- 审计对象：`dsh-token-saver` v1.0.5（审计起点 HEAD `5a335ea`，本报告全部条目修完后的 HEAD 见 `git log`）
+- 审计对象：`dsh-token-saver` v1.0.5（审计起点 HEAD `5a335ea`；所有标 ✅ 的条目均已修复，最终 HEAD 见 `git log`）
 - 仓库：`/home/lovedolove/projects/dsh-token-saver`
 - 测试基线：`npx vitest run` → 17 files / 186 tests **全绿**（修复后；审计当时为 170）
 - 方法：读源码 + 针对 `src/` 直接调用内部函数复现（不走打包产物），每个结论都有可复跑的探针
@@ -312,7 +312,7 @@ reported == actual  否，差了 16381    是
 
 ## 5. 建议的修复顺序
 
-> **到本节为止全部条目均已落地**，最终 HEAD 见 `git log`，工作区干净，`npx tsc --noEmit -p tsconfig.build.json` 与 `npx vitest run`（17 files / 186 tests）全绿。以下为当初的优先级排序，保留作记录。
+> **除 L4/L5（仅为记录，可选清理，不带 ✅）外，本报告所有条目均已修复**；最终 HEAD 见 `git log`，工作区干净，`npx tsc --noEmit -p tsconfig.build.json`、`npx vitest run`（17 files / 186 tests）、`npm run build`、`node scripts/verify-package.mjs` 四级全绿。以下为当初的优先级排序，保留作记录。
 
 1. **B1** ✅ — `READ_LIKE_TOOLS` 守卫 + 透出 `rtkFilter`（数据销毁，最高优先）
 2. **F1** ✅ — 删 `lib/` 出版本控制 + `.gitignore` 锚定 `/lib/` + 补 `prepare` 脚本 + CI 校验（否则第 1 条修了也发不出去）。**注意**：该项的两个连带缺陷见 §3 F1 的「实际修复」——裸 `lib/` 会误伤 `src/lib/`，而 `prepack` 不覆盖 git URL 安装，必须补 `prepare`
