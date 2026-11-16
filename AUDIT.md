@@ -301,6 +301,7 @@ reported == actual  否，差了 16381    是
 | P2 ✅ | `src/prompt-shaping/prompts.ts:138` | 上游 ponytail 的「动手前先列出改动必须触达的全部位置：callers、tests、fixtures、config、exports」「对方案懒惰，对改动不懒惰：调用方与被破坏的测试也要一并完成」「修 bug 修共享函数里的根因一次，而不是逐个调用点修症状」三条全部缺失。新增 `SHARED_SCOPE` 常量并插入 ponytail 三档 |
 | P3 ✅ | `src/prompt-shaping/prompts.ts:107`、`docs/prompt-shaping.md:30` | `wenyan` 档声明「80-90% character reduction」。上游 megacave 明确写着 "Token savings are small and noisy; never claim them"。改为「屏幕字符更少」且不承诺任何数字 |
 | P4 ✅ | `src/prompt-shaping/prompts.ts:144` vs `:50` | `SHARED_OUTPUT` 规定输出模板 `` `[code] → skipped: [X], add when [Y].` ``，而 `SHARED_NO_DECORATION` 又禁止箭头简写，两条护栏自相矛盾。去掉箭头模板，改为 `skipped: [X], add when [Y]; risk: [Z].` |
+| P6 ✅ | `src/prompt-shaping/prompts.ts:135` | `SHARED_LADDER` **整条漏掉上游第 2 级**「本仓库里已经有了？（helper / component / service / pattern）——按周边代码的用法复用」，导致阶梯从 YAGNI 直接跳到标准库，最该省事的一级反而缺失。补上并重排其余编号（现为 7 级）。同时 `SHARED_SCOPE` 漏掉「动手前 grep 该函数的所有调用方」「搬移或合并的代码保留其错误处理与校验」「沿用仓库既有分层与约定」，`SHARED_RULES` 漏掉「最短 diff 的前提是已知全部触达点」「注释只写代码本身表达不出的 why，一行」 |
 | P5 ✅ | `client.js:633` | caveman 等级兜底列表写成 `['off','lite','normal','hard','extreme','ultra']`：其中 `normal`/`hard`/`extreme` 并非合法等级（`src/config.ts:70` 只认 7 档），且**全部漏掉 `wenyan-lite`/`wenyan`/`wenyan-ultra`**；同时 `levelLabels`（`client.js:507`）没有 wenyan 键，按钮会回退渲染原始 id。补 `wenyan` 三档中英文标签并清理 `normal`/`hard`/`extreme` |
 
 **已排查、确认无问题**：F11 无 XSS 面 ✅；F12 插件缺失路径有处理 ✅；F13 空统计文件渲染正常 ✅。
