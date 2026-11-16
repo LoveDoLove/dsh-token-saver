@@ -963,7 +963,7 @@ DSH's own auxiliary calls (compaction, session-title) use configurable, realisti
 ## 10. Findings for the repo under study (`/home/lovedolove/projects/dsh-token-saver`)
 
 > **Status: historical. All six findings below are CLOSED as of the current tree (post-`v1.0.6`
-> tag, `package.json` still `1.0.5`).**
+> tag).**
 > They are kept verbatim because they are the evidence trail for the fixes, but they describe
 > code that no longer exists. Re-verified 2026-11 against the repo at HEAD and the installed
 > DSH 0.2.2-rc.3:

@@ -46,12 +46,12 @@ dsh plugin --profile web add github:LoveDoLove/dsh-token-saver
 Pin the current release:
 
 ```bash
-dsh plugin --profile web add github:LoveDoLove/dsh-token-saver#v1.0.5
+dsh plugin --profile web add github:LoveDoLove/dsh-token-saver#v1.0.7
 ```
 
 If DSH asks for build-script approval, follow the printed instructions and retry.
-The prebuilt `dsh-token-saver-1.0.5.tgz` on the
-[v1.0.5 release](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.5)
+The prebuilt `dsh-token-saver-1.0.7.tgz` on the
+[v1.0.7 release](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.7)
 installs without a local build.
 
 > **Upgrading from v1.0.4 or older?** v1.0.5 fixes a data-destruction bug in RTK

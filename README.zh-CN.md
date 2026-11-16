@@ -39,12 +39,12 @@ dsh plugin --profile web add github:LoveDoLove/dsh-token-saver
 固定到当前版本：
 
 ```bash
-dsh plugin --profile web add github:LoveDoLove/dsh-token-saver#v1.0.5
+dsh plugin --profile web add github:LoveDoLove/dsh-token-saver#v1.0.7
 ```
 
 如果 DSH 要求批准构建脚本，按提示操作后重试。也可以在
-[v1.0.5 发布页](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.5)
-下载预构建的 `dsh-token-saver-1.0.5.tgz`，无需本地构建环境。
+[v1.0.7 发布页](https://github.com/LoveDoLove/dsh-token-saver/releases/tag/v1.0.7)
+下载预构建的 `dsh-token-saver-1.0.7.tgz`，无需本地构建环境。
 
 > **从 v1.0.4 或更早版本升级？** v1.0.5 修复了 RTK 自动检测中的数据破坏问题，该问题可能把 README 风格的正文压缩成几行。如果你通过工具读取文件，请升级。
 
