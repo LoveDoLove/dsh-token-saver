@@ -49,10 +49,18 @@ const SHARED_NO_SELF_REFERENCE =
 const SHARED_NO_DECORATION =
   'No decorative emoji. No narrating tool calls ("I will now search", "I used X to find Y"). No opening line announcing what you are about to do, and no closing line recapping it or offering further help. No status phrases ("Sure!", "Of course!", "I\'d be happy to"). No causal arrow shorthand ("A -> B -> fails"). State the thing, the action, the reason. Then next step.'
 
+const SHARED_SENTENCE =
+  'One idea per sentence, 20 words max, active voice, imperative for instructions, one term per thing, a pronoun only with an obvious referent. Fragments are fine while the sentence still reads in one pass. Compression and clarity conflict: clarity wins.'
+
+const SHARED_TOOL_STATUS =
+  'Tool runs: no text between routine calls. One line before a multi-step run, one line at each phase change, one line with the result at the end. Otherwise text before a call only to clarify, warn or disambiguate.'
+
 const CAVEMAN_PROMPTS: Record<Exclude<CavemanLevel, 'off'>, string> = {
   lite: [
     'Respond tersely. Keep grammar and full sentences but drop filler, hedging and pleasantries (just/really/basically/sure/of course/I\'d be happy to).',
     SHARED_BOUNDARIES,
+    SHARED_SENTENCE,
+    SHARED_TOOL_STATUS,
     SHARED_EXAMPLES,
     'Pattern: state the thing, the action, the reason. Then next step.',
     SHARED_AUTO_CLARITY,
@@ -66,6 +74,8 @@ const CAVEMAN_PROMPTS: Record<Exclude<CavemanLevel, 'off'>, string> = {
   full: [
     'Respond like terse caveman. All technical substance stay exact, only fluff die.',
     SHARED_BOUNDARIES,
+    SHARED_SENTENCE,
+    SHARED_TOOL_STATUS,
     'Drop: articles (a/an/the), filler (just/really/basically/actually/simply), pleasantries, hedging. Fragments OK. Short synonyms (big not extensive, fix not implement a solution for).',
     SHARED_EXAMPLES,
     'Pattern: [thing] [action] [reason]. [next step].',
@@ -80,6 +90,8 @@ const CAVEMAN_PROMPTS: Record<Exclude<CavemanLevel, 'off'>, string> = {
   ultra: [
     'Respond ultra-terse. Maximum compression. Telegraphic.',
     SHARED_BOUNDARIES,
+    SHARED_SENTENCE,
+    SHARED_TOOL_STATUS,
     'Strip conjunctions. One word when one word enough.',
     SHARED_EXAMPLES,
     'Pattern: [thing] [action] [reason]. [next step].',
@@ -94,6 +106,8 @@ const CAVEMAN_PROMPTS: Record<Exclude<CavemanLevel, 'off'>, string> = {
   'wenyan-lite': [
     'Respond semi-classical. Drop filler/hedging but keep grammar structure, classical register.',
     SHARED_BOUNDARIES,
+    SHARED_SENTENCE,
+    SHARED_TOOL_STATUS,
     'Use classical Chinese sentence patterns where natural. Keep English for technical terms.',
     SHARED_EXAMPLES,
     SHARED_AUTO_CLARITY,
@@ -106,6 +120,8 @@ const CAVEMAN_PROMPTS: Record<Exclude<CavemanLevel, 'off'>, string> = {
   wenyan: [
     'Respond classical Chinese (文言文). Maximum classical terseness. Fewer characters on screen; do not claim a savings number.',
     SHARED_BOUNDARIES,
+    SHARED_SENTENCE,
+    SHARED_TOOL_STATUS,
     'Classical sentence patterns, verbs precede objects, subjects often omitted, classical particles (之/乃/為/其).',
     'Keep English for code, commands, function names, API names, error strings.',
     SHARED_EXAMPLES,
@@ -119,6 +135,8 @@ const CAVEMAN_PROMPTS: Record<Exclude<CavemanLevel, 'off'>, string> = {
   'wenyan-ultra': [
     'Respond extreme classical compression (文言文 ultra). Maximum compression, ultra terse.',
     SHARED_BOUNDARIES,
+    SHARED_SENTENCE,
+    SHARED_TOOL_STATUS,
     'Same classical rules as wenyan-full but even more compressed. One classical particle per clause.',
     SHARED_EXAMPLES,
     SHARED_AUTO_CLARITY,

@@ -81,6 +81,8 @@ describe('Prompt Shaping - Caveman & Ponytail', () => {
       expect(text).toContain('Anything persisted outside chat')
       expect(text).toContain('A sentence with two readings')
       expect(text).toContain('A status line or confirmation the harness asks for')
+      expect(text).toContain('One idea per sentence, 20 words max')
+      expect(text).toContain('Tool runs: no text between routine calls')
     }
   })
 

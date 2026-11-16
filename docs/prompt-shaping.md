@@ -52,7 +52,13 @@ Every level keeps the same safety rails:
 - Anything persisted outside chat (code, comments, commits, docs, issues, PRs,
   tickets, memory files) is written in normal prose, never terse style.
 - Security warnings, irreversible-action confirmations, multi-step ordered
-  sequences, and questions or option lists are written normally.
+  sequences, and questions or option lists are written normally. A status line
+  or confirmation the harness asks for is given.
+- One idea per sentence, 20 words maximum, active voice. Compression yields to
+  clarity when the two conflict.
+- Tool runs carry bounded status: one line before a multi-step run, one at each
+  phase change, one with the result. No text between routine calls. No opening
+  line announcing the plan and no closing line recapping it.
 - No invented abbreviations. Standard acronyms are fine; symbol names, API
   names, and error strings stay verbatim.
 - The user's dominant language is preserved, except for the Wenyan levels.
