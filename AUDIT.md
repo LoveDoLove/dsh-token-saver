@@ -1,8 +1,8 @@
 # dsh-token-saver 审计报告
 
-- 审计对象：`dsh-token-saver` v1.0.4（HEAD `5a335ea`，工作区干净）
+- 审计对象：`dsh-token-saver` v1.0.5（审计起点 HEAD `5a335ea`，本报告全部条目修完后的 HEAD 见 `git log`）
 - 仓库：`/home/lovedolove/projects/dsh-token-saver`
-- 测试基线：`npx vitest run` → 17 files / 178 tests **全绿**（修复后；审计当时为 170）
+- 测试基线：`npx vitest run` → 17 files / 186 tests **全绿**（修复后；审计当时为 170）
 - 方法：读源码 + 针对 `src/` 直接调用内部函数复现（不走打包产物），每个结论都有可复跑的探针
 
 > 说明：下列结论中，标 ✅ 的是我本人独立复现过的；标 ⚠️ 的是原审计（子代理）提出、但被我复现**推翻或降级**的。
@@ -312,16 +312,20 @@ reported == actual  否，差了 16381    是
 
 ## 5. 建议的修复顺序
 
-1. **B1** — `READ_LIKE_TOOLS` 守卫 + 透出 `rtkFilter`（数据销毁，最高优先）
-2. **F1** — 删 `lib/` 出版本控制 + `.gitignore` 锚定 `/lib/` + 补 `prepare` 脚本 + CI 校验（否则第 1 条修了也发不出去）。**注意**：该项的两个连带缺陷见 §3 F1 的「实际修复」——裸 `lib/` 会误伤 `src/lib/`，而 `prepack` 不覆盖 git URL 安装，必须补 `prepare`
-3. **B2 / B3** — 收紧 `isMostlyPorcelain`；`gitStatus.ts:40-41` 排除 `!!`
-4. **F2** — 第二遍应识别并跳过已 RTK 处理过的文本（`calls` 语义已确认无误，不必改）
-5. **R1** — RegExp 提到循环外 + 对模型提供的 pattern 限流
-6. **F4 / F3** — 修 `promptCalls`（含改测试）、修正 UI 标签语义
-7. **B8** — 删掉 `session-title` 分支或改为从首条用户消息构造标题
-8. **L1 + L2** — 随第 1 条一并清理
+> **到本节为止全部条目均已落地**，最终 HEAD 见 `git log`，工作区干净，`npx tsc --noEmit -p tsconfig.build.json` 与 `npx vitest run`（17 files / 186 tests）全绿。以下为当初的优先级排序，保留作记录。
+
+1. **B1** ✅ — `READ_LIKE_TOOLS` 守卫 + 透出 `rtkFilter`（数据销毁，最高优先）
+2. **F1** ✅ — 删 `lib/` 出版本控制 + `.gitignore` 锚定 `/lib/` + 补 `prepare` 脚本 + CI 校验（否则第 1 条修了也发不出去）。**注意**：该项的两个连带缺陷见 §3 F1 的「实际修复」——裸 `lib/` 会误伤 `src/lib/`，而 `prepack` 不覆盖 git URL 安装，必须补 `prepare`
+3. **B2 / B3** ✅ — 收紧 `isMostlyPorcelain`；`gitStatus.ts:40-41` 排除 `!!`
+4. **F2** ✅ — 第二遍应识别并跳过已 RTK 处理过的文本（`calls` 语义已确认无误，不必改）
+5. **R1** ✅ — RegExp 提到循环外 + 对模型提供的 pattern 限流
+6. **F4 / F3** ✅ — 修 `promptCalls`（含改测试）、修正 UI 标签语义
+7. **B8** ✅ — 删掉 `session-title` 分支或改为从首条用户消息构造标题
+8. **L1 + L2** ✅ — 随第 1 条一并清理
 9. ~~**B4** — 加多块 + CJK 回归测试后再动~~ ✅ 已完成：回归测试 4 条 + fuzz 4000 例，并顺带删掉失效的 `originalText` 参数
-10. **F14** — CI ✅ 已完成（`.github/workflows/ci.yml`）
+10. **F14** ✅ — CI ✅ 已完成（`.github/workflows/ci.yml`）
+
+**P1–P8（提示词塑形移植缺口）** 不在原审计范围内，是本轮新增的第八组发现，全部已修：P1–P4 补 caveman 缺失护栏与自相矛盾的输出模板，P5 修等级选择器标签，P6 补回 ponytail 阶梯缺失的「本仓库已有」一级，P7–P8 补回开闭场裁剪、harness 状态行、句长下限与工具运行有界状态。覆盖率探针 `/tmp/coverage.mts` 现报 **22/22** 上游护栏全部覆盖。
 
 ---
 
@@ -330,7 +334,7 @@ reported == actual  否，差了 16381    是
 - 错误处理契约严格：`decidePostTool` 顶层 `try/catch` 兜底 `accept`，`isError` 结果**永不**压缩（`tool-result-trim.ts:102-110`）——这个设计是对的，也正因为有了它，B1 才没有演变成更糟的事故。
 - `truncate` 的字节边界处理（`breakAtLineBoundary` / `sliceByBytes`）经实测**正确**，多字节安全。
 - 缓存稳定性（`stabilizeForCache`、`cache_control` 断点保持最后）设计合理。
-- 170 个测试全绿、覆盖率结构清晰——问题不在测试纪律，而在**测试没覆盖「read 工具 + Markdown」这条路径**（`grep -rl "README" test/` 为空）。
+- 186 个测试全绿、覆盖率结构清晰——问题不在测试纪律，而在**测试没覆盖「read 工具 + Markdown」这条路径**（`grep -rl "README" test/` 为空）。
 
 ---
 
