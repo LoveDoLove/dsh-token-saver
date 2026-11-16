@@ -297,14 +297,14 @@ reported == actual  否，差了 16381    是
 | L4 | `src/rtk/constants.ts:10-44` | 大量常量（`GIT_DIFF_HUNK_MAX_LINES`、`STATUS_MAX_FILES`、`TREE_MAX_LINES` 等）只在 `__testing` 或默认参数里出现 |
 | L5 | 同上 | 所有可选 filter 参数在生产路径上不可达 |
 | F14 ✅ | — | 仓库**没有 CI**。F1（陈旧 `lib/`）和这一条是同一个根因的两面。已新增 `.github/workflows/ci.yml`：pnpm install → lint → typecheck → test → build → `node scripts/verify-package.mjs`（校验所有 `exports` 入口都指向构建产物、46 个源模块都有编译输出、13 个过滤器都已注册） |
-| P1 ✅ | `src/prompt-shaping/prompts.ts:34` | `SHARED_BOUNDARIES` 缺五条护栏。上游 caveman `SKILL.md` 的 pre-send check 第 3、4 条（否定/条件限定词不可弱化；数字与单位逐字保留；一句话若有歧义写成完整句）与规则 5（聊外持久化内容用正常文体）在移植时整体丢失。另补「代码改动只展示改动行加少量上下文，不是整个文件」与「不得删除或缩短被改文件中的既有注释」 |
-| P2 ✅ | `src/prompt-shaping/prompts.ts:138` | 上游 ponytail 的「动手前先列出改动必须触达的全部位置：callers、tests、fixtures、config、exports」「对方案懒惰，对改动不懒惰：调用方与被破坏的测试也要一并完成」「修 bug 修共享函数里的根因一次，而不是逐个调用点修症状」三条全部缺失。新增 `SHARED_SCOPE` 常量并插入 ponytail 三档 |
-| P3 ✅ | `src/prompt-shaping/prompts.ts:107`、`docs/prompt-shaping.md:30` | `wenyan` 档声明「80-90% character reduction」。上游 megacave 明确写着 "Token savings are small and noisy; never claim them"。改为「屏幕字符更少」且不承诺任何数字 |
-| P4 ✅ | `src/prompt-shaping/prompts.ts:144` vs `:50` | `SHARED_OUTPUT` 规定输出模板 `` `[code] → skipped: [X], add when [Y].` ``，而 `SHARED_NO_DECORATION` 又禁止箭头简写，两条护栏自相矛盾。去掉箭头模板，改为 `skipped: [X], add when [Y]; risk: [Z].` |
-| P6 ✅ | `src/prompt-shaping/prompts.ts:135` | `SHARED_LADDER` **整条漏掉上游第 2 级**「本仓库里已经有了？（helper / component / service / pattern）——按周边代码的用法复用」，导致阶梯从 YAGNI 直接跳到标准库，最该省事的一级反而缺失。补上并重排其余编号（现为 7 级）。同时 `SHARED_SCOPE` 漏掉「动手前 grep 该函数的所有调用方」「搬移或合并的代码保留其错误处理与校验」「沿用仓库既有分层与约定」，`SHARED_RULES` 漏掉「最短 diff 的前提是已知全部触达点」「注释只写代码本身表达不出的 why，一行」 |
-| P7 ✅ | `src/prompt-shaping/prompts.ts:50`、`:29` | 上游 caveman「When to break the rules」第 6 条（harness 索要状态行或确认时照给：「harness 决定你**何时**说话，caveman 决定**怎么**说」）与 pre-send check 第 1、2 条（首句宣告要做的事→删；末句复述或主动揽活→删）在移植时丢失，而这两条正是输出侧最常见的浪费来源。分别并入 `SHARED_BOUNDARIES` 与 `SHARED_NO_DECORATION` |
-| P8 ✅ | `src/prompt-shaping/prompts.ts:52`、`:55` | 上游 caveman 规则 5（ASD-STE100 下限：一句一意、20 词上限、主动语态、一物一名；压缩与清晰冲突时清晰优先）与规则 7（工具运行只保留有界状态：多步前一行、每个阶段变化一行、结束一行；例行调用之间不夹文字）整条缺失。新增 `SHARED_SENTENCE`、`SHARED_TOOL_STATUS` 两个常量并插入 caveman 全部 6 档 |
+| P1 ✅ | `src/prompt-shaping/prompts.ts:28` | `SHARED_BOUNDARIES` 缺五条护栏。上游 caveman `SKILL.md` 的 pre-send check 第 3、4 条（否定/条件限定词不可弱化；数字与单位逐字保留；一句话若有歧义写成完整句）与规则 5（聊外持久化内容用正常文体）在移植时整体丢失。另补「代码改动只展示改动行加少量上下文，不是整个文件」与「不得删除或缩短被改文件中的既有注释」 |
+| P2 ✅ | `src/prompt-shaping/prompts.ts:156` | 上游 ponytail 的「动手前先列出改动必须触达的全部位置：callers、tests、fixtures、config、exports」「对方案懒惰，对改动不懒惰：调用方与被破坏的测试也要一并完成」「修 bug 修共享函数里的根因一次，而不是逐个调用点修症状」三条全部缺失。新增 `SHARED_SCOPE` 常量并插入 ponytail 三档 |
+| P3 ✅ | `src/prompt-shaping/prompts.ts:120`、`docs/prompt-shaping.md:32` | `wenyan` 档声明「80-90% character reduction」。上游 megacave 明确写着 "Token savings are small and noisy; never claim them"。改为「屏幕字符更少」且不承诺任何数字 |
+| P4 ✅ | `src/prompt-shaping/prompts.ts:162` vs `:49` | `SHARED_OUTPUT` 规定输出模板 `` `[code] → skipped: [X], add when [Y].` ``，而 `SHARED_NO_DECORATION` 又禁止箭头简写，两条护栏自相矛盾。去掉箭头模板，改为 `skipped: [X], add when [Y]; risk: [Z].` |
 | P5 ✅ | `client.js:633` | caveman 等级兜底列表写成 `['off','lite','normal','hard','extreme','ultra']`：其中 `normal`/`hard`/`extreme` 并非合法等级（`src/config.ts:70` 只认 7 档），且**全部漏掉 `wenyan-lite`/`wenyan`/`wenyan-ultra`**；同时 `levelLabels`（`client.js:507`）没有 wenyan 键，按钮会回退渲染原始 id。补 `wenyan` 三档中英文标签并清理 `normal`/`hard`/`extreme` |
+| P6 ✅ | `src/prompt-shaping/prompts.ts:153` | `SHARED_LADDER` **整条漏掉上游第 2 级**「本仓库里已经有了？（helper / component / service / pattern）——按周边代码的用法复用」，导致阶梯从 YAGNI 直接跳到标准库，最该省事的一级反而缺失。补上并重排其余编号（现为 7 级）。同时 `SHARED_SCOPE` 漏掉「动手前 grep 该函数的所有调用方」「搬移或合并的代码保留其错误处理与校验」「沿用仓库既有分层与约定」，`SHARED_RULES` 漏掉「最短 diff 的前提是已知全部触达点」「注释只写代码本身表达不出的 why，一行」 |
+| P7 ✅ | `src/prompt-shaping/prompts.ts:49`、`:28` | 上游 caveman「When to break the rules」第 6 条（harness 索要状态行或确认时照给：「harness 决定你**何时**说话，caveman 决定**怎么**说」）与 pre-send check 第 1、2 条（首句宣告要做的事→删；末句复述或主动揽活→删）在移植时丢失，而这两条正是输出侧最常见的浪费来源。分别并入 `SHARED_BOUNDARIES` 与 `SHARED_NO_DECORATION` |
+| P8 ✅ | `src/prompt-shaping/prompts.ts:52`、`:55` | 上游 caveman 规则 5（ASD-STE100 下限：一句一意、20 词上限、主动语态、一物一名；压缩与清晰冲突时清晰优先）与规则 7（工具运行只保留有界状态：多步前一行、每个阶段变化一行、结束一行；例行调用之间不夹文字）整条缺失。新增 `SHARED_SENTENCE`、`SHARED_TOOL_STATUS` 两个常量并插入 caveman 全部 6 档 |
 
 **已排查、确认无问题**：F11 无 XSS 面 ✅；F12 插件缺失路径有处理 ✅；F13 空统计文件渲染正常 ✅。
 
