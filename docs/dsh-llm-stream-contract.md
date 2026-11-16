@@ -1,5 +1,15 @@
 # DSH 0.2.1-rc.2 — `llm/stream` runtime contract and LLM request/response shapes
 
+> **Version note (2026-11):** this report is anchored to DSH **0.2.1-rc.2**, read from a pnpm store
+> that no longer exists on this machine (`PNPM_ROOT` below is stale). The harness installed today is
+> **0.2.2-rc.3**, whose packages live under
+> `/home/lovedolove/.local/share/mise/installs/node/24.22.3/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/`.
+> The core shapes this plugin depends on are unchanged between the two (`FinishReason` is still the
+> `{ kind }` object map, `TokenUsage` is still `inputTokens`/`outputTokens`, `GenerateOptions` gained
+> no `metadata`/`responseFormat`/`cacheControl`/`instructions`/`systemPrompt` field). The one
+> material delta for this plugin is the `purpose` field — see the correction in §7.1 and the
+> historical-status note at §10.
+
 > **Status (v1.0.6):** the plugin no longer rewrites `llm/stream` requests or listens to
 > `system-prompt/assemble`. Prompt shaping now uses `ctx.systemPrompt.section()`, and compaction
 > providers are chosen in `cordis.yml`. Where this report suggests the `system-prompt/assemble`
@@ -735,11 +745,38 @@ yield { type: 'finish', reason: { kind: 'stop' } };
     purpose?: 'compaction' | 'session-title';
 ```
 
-**The EXACT set of `purpose` values in DSH 0.2.1-rc.2 is exactly two:**
-`'compaction'` and `'session-title'`. There is **no** `'quota'`, no `'title'`, no `'summary'`.
+> **Correction (2026-11, DSH 0.2.2-rc.3):** the "exactly two" claim below was true of the
+> 0.2.1-rc.2 tree it was written against, but it is no longer the shape of the field. In
+> 0.2.2-rc.3 `purpose` is an **extensible declaration-merged map**, not a closed union:
+>
+> ```ts
+> // dsh-llm/lib/types/types.d.ts:529-533
+> /** Auxiliary request purposes declared by their producer packages. */
+> export interface LlmRequestPurposeMap {}
+> /** Declared auxiliary request purpose; ordinary conversation requests leave it absent. */
+> export type LlmRequestPurpose = Extract<keyof LlmRequestPurposeMap, string>;
+> ```
+>
+> Each producer package augments the empty map from its own `types` entry:
+>
+> - `dsh-compaction-basic/lib/types/types.d.ts:7` → `'compaction': true;`
+> - `dsh-session-title-llm/lib/types/index.d.ts:9` → `'session-title': true;`
+> - `dsh-experimental-auto-review/lib/types/index.d.ts:11` → `'auto-review': true;`
+>
+> and `GenerateOptions` is generic over it (`purpose?: Purpose;`, `types.d.ts:579`). A fresh
+> `grep -rn 'purpose: "' …/*/lib/index.js` in 0.2.2-rc.3 returns **three** assignments:
+> `dsh-compaction-basic/lib/index.js:320` → `"compaction"`,
+> `dsh-session-title-llm/lib/index.js:196` → `"session-title"`, and
+> `dsh-experimental-auto-review/lib/index.js:516` → `"auto-review"`.
+>
+> The operative conclusions for this plugin are unchanged: there is still **no** `'quota'`, no
+> `'title'`, no `'summary'`, so a detector must not key on `purpose` for those.
 
-I grepped every `@deepseek-ai/*` package for `purpose: '<literal>'`; the only two assignments to a
-`GenerateOptions.purpose` in the whole DSH tree are:
+**The set of `purpose` values in DSH 0.2.1-rc.2 was exactly two:**
+`'compaction'` and `'session-title'`. There was **no** `'quota'`, no `'title'`, no `'summary'`.
+
+Grepping every `@deepseek-ai/*` package for `purpose: '<literal>'` found exactly two assignments to a
+`GenerateOptions.purpose` in the 0.2.1-rc.2 tree:
 
 - `dsh-compaction-basic/lib/index.js:320` → `purpose: "compaction",`
 - `dsh-session-title-llm/lib/index.js:196` → `purpose: "session-title",`
@@ -925,7 +962,25 @@ DSH's own auxiliary calls (compaction, session-title) use configurable, realisti
 
 ## 10. Findings for the repo under study (`/home/lovedolove/projects/dsh-token-saver`)
 
-These are contract mismatches found while reading the repo against the DSH contract above.
+> **Status: historical. All six findings below are CLOSED as of the current tree (post-`v1.0.6`
+> tag, `package.json` still `1.0.5`).**
+> They are kept verbatim because they are the evidence trail for the fixes, but they describe
+> code that no longer exists. Re-verified 2026-11 against the repo at HEAD and the installed
+> DSH 0.2.2-rc.3:
+>
+> | # | Claim | Current state |
+> |---|---|---|
+> | 10.1 | `makeSystemPromptRegistry` / `.register` no-op | **Deleted** — 0 references in `src/`; shaping goes through `ctx.systemPrompt.section()` at `src/index.ts:159-190` |
+> | 10.2 | `replaceCompactionProvider` / `scope.registry.replace` | **Deleted** — 0 references in `src/`; the plugin now warns and defers to `cordis.yml` (`src/index.ts:264`) |
+> | 10.3 | `finish.reason` emitted as the string `'stop'` | **Fixed** — `src/local-responses/stream.ts:89-90` emits `{ type: 'finish', reason: { kind: 'stop' } }` |
+> | 10.4 | `usage` uses wire-style `input`/`output` | **Fixed** — `src/local-responses/stream.ts:80-85` emits `inputTokens: 0, outputTokens: 0, totalTokens: 0` |
+> | 10.5 | `quotaAnswer` keys on `purpose === 'quota'` | **Fixed** — no `purpose` gate in `quotaAnswer`; only `titleAnswer` reads `purpose === 'session-title'` (`src/local-responses/detectors.ts:203`), which is a real value. NB: the detector still requires `maxTokens === 1`, which DSH never sends (§9), so on DSH the `quota` kind remains **inert** — correct but unreachable |
+> | 10.6 | `injectSystem` mutates the frozen loop request in `llmStreamListener` | **Fixed** — 0 `injectSystem` references in `src/index.ts`; `injectSystem` survives only as a library helper (`src/prompt-shaping/inject.ts:244`) reached via `src/token-saver/pipeline.ts:120` (`compressRequest`), which is re-exported for host callers at `src/index.ts:395` but is **not** invoked by any DSH runtime path — the `/local-optimize` route only reads/writes settings (`src/routes.ts:33-40`) |
+>
+> The file/line anchors below point at `src/index.ts` and `lib/…` as they were when written; the
+> current entrypoint has moved on (the `llm/stream` hook now lives at `src/index.ts:209-256`).
+
+These were contract mismatches found while reading the repo against the DSH contract above.
 
 ### 10.1 `systemPromptRegistry.register(...)` does not exist → silent no-op
 
@@ -1029,7 +1084,8 @@ with `llmStreamListener` at `src/index.ts:~176-241` taking `(options, next)` and
   0.2.1-rc.2.
 - **No** `scope.registry.replace(...)` for services in DSH.
 - **No** `maxTokens: 1` / `max_tokens: 1` probe anywhere in DSH.
-- **No** `purpose` value other than `'compaction'` and `'session-title'`.
+- **No** `purpose` value among `'quota'`, `'title'`, `'summary'` in DSH 0.2.1-rc.2 / 0.2.2-rc.3. (The
+  declared set is extensible — see the correction in §7.1 — and 0.2.2-rc.3 adds `'auto-review'`.)
 - **No** chunk-shape validator in DSH 0.2.1-rc.2 (the 0.0.1-rc.5 `lib/invariant.js` is gone).
 - **No** `usage.input` / `usage.output` / `usage.input_tokens` in the DSH chunk contract — only
   `inputTokens` / `outputTokens` / `totalTokens` / `cacheReadTokens` / `cacheWriteTokens` /

@@ -32,7 +32,9 @@ results.
 - Re-verified on: v1.0.5, Node.js v24.22.3, Linux — scenario A 182,892 → 24,675
   (86.5%), scenario B-library 19,781 → 1,301 (93.4%), scenario C 9,423 → 2,163
   (77.0%), each byte-exact against the tables below.
-- DSH version: 0.2.1-rc.2
+- DSH version: 0.2.1-rc.2 (benchmark run; the current harness is 0.2.2-rc.3 — the token-shape
+  contract this benchmark exercises is unchanged between them, but see
+  [the contract report's version note](dsh-llm-stream-contract.md) before re-running)
 - Node.js: v24.22.0
 - OS: Linux 6.18.33.2-microsoft-standard-WSL2 (WSL2)
 - Working tree: clean

@@ -28,7 +28,9 @@ reaches the model. Each detector therefore requires a shape that ordinary use
 does not produce.
 
 - **Quota** requires both the word "quota" and `maxTokens === 1`. A bare integer
-  message is an ordinary message, not a probe.
+  message is an ordinary message, not a probe. **DSH never sends a `maxTokens: 1`
+  probe** (see [the contract report](dsh-llm-stream-contract.md) §9), so this kind is
+  inert on DSH — it is kept for non-DSH hosts and costs only a few comparisons.
 - **Prefix** requires the policy envelope, not just the word "command".
 - **Title** requires `purpose: 'session-title'` or a system prompt with the title
   provider's specific shape. It never returns a constant placeholder; if no title

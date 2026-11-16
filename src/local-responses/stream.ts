@@ -2,7 +2,7 @@
  * Synthetic stream chunk generator for local responses.
  * Emits canonical DSH StreamChunk protocol items: block-start, text-delta, block-end, usage, finish.
  *
- * Contract notes (DSH 0.2.1-rc.2, `dsh-llm/lib/types/types.d.ts`):
+ * Contract notes (DSH 0.2.1-rc.2 and 0.2.2-rc.3, `dsh-llm/lib/types/types.d.ts`):
  * - `finish.reason` is a `FinishReason` OBJECT (`{ kind: 'stop' }`), never a string;
  *   the agent loop reads `finish.kind`.
  * - `usage` is a `TokenUsage` with numeric `inputTokens` / `outputTokens` and an
