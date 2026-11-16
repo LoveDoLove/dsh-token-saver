@@ -26,7 +26,7 @@ export const PONYTAIL_LEVELS: readonly PonytailLevel[] = [
 ]
 
 const SHARED_BOUNDARIES =
-  'Code blocks, file paths, commands, errors, URLs: keep exact. Never drop or weaken negation (not, never, no, none, only, except; 不/非/勿/未/毋) or a conditional qualifier (only, unless, at least). Numbers and units exact, Arabic numerals. Code changes shown in chat: changed lines plus 1-2 lines of context, not the whole file (whole file only if asked, the file is new, or most of it changes). Existing comments in files you edit are payload: never delete or shorten one you were not asked to change. Anything persisted outside chat (code, comments, commits, docs, issues, PRs, tickets, memory files): write it in normal prose, not terse style. Security warnings, irreversible action confirmations, multi-step ordered sequences, questions and option lists: write normal. A sentence with two readings: write it in full. Resume terse style after.'
+  'Code blocks, file paths, commands, errors, URLs: keep exact. Never drop or weaken negation (not, never, no, none, only, except; 不/非/勿/未/毋) or a conditional qualifier (only, unless, at least). Numbers and units exact, Arabic numerals. Code changes shown in chat: changed lines plus 1-2 lines of context, not the whole file (whole file only if asked, the file is new, or most of it changes). Existing comments in files you edit are payload: never delete or shorten one you were not asked to change. Anything persisted outside chat (code, comments, commits, docs, issues, PRs, tickets, memory files): write it in normal prose, not terse style. Security warnings, irreversible action confirmations, multi-step ordered sequences, questions and option lists: write normal. A status line or confirmation the harness asks for: give it. A sentence with two readings: write it in full. Resume terse style after.'
 
 const SHARED_EXAMPLES =
   'Not: "Sure! I\'d be happy to help you with that. The issue you\'re experiencing is likely caused by..." Yes: "Bug in auth middleware. Token expiry check use `<` not `<=`. Fix:"'
@@ -47,7 +47,7 @@ const SHARED_NO_SELF_REFERENCE =
   'No self-reference. Do not name or announce the style (no "caveman mode", no "me caveman think", no "compressed mode active"). Just respond.'
 
 const SHARED_NO_DECORATION =
-  'No decorative emoji. No narrating tool calls ("I will now search", "I used X to find Y"). No status phrases ("Sure!", "Of course!", "I\'d be happy to"). No causal arrow shorthand ("A -> B -> fails"). State the thing, the action, the reason. Then next step.'
+  'No decorative emoji. No narrating tool calls ("I will now search", "I used X to find Y"). No opening line announcing what you are about to do, and no closing line recapping it or offering further help. No status phrases ("Sure!", "Of course!", "I\'d be happy to"). No causal arrow shorthand ("A -> B -> fails"). State the thing, the action, the reason. Then next step.'
 
 const CAVEMAN_PROMPTS: Record<Exclude<CavemanLevel, 'off'>, string> = {
   lite: [

@@ -80,6 +80,16 @@ describe('Prompt Shaping - Caveman & Ponytail', () => {
       expect(text).toContain('changed lines plus 1-2 lines of context')
       expect(text).toContain('Anything persisted outside chat')
       expect(text).toContain('A sentence with two readings')
+      expect(text).toContain('A status line or confirmation the harness asks for')
+    }
+  })
+
+  it('cuts the announcing opener and the recapping closer at every caveman level', () => {
+    for (const lvl of CAVEMAN_LEVELS) {
+      if (lvl === 'off') continue
+      const text = cavemanPrompt(lvl)!
+      expect(text).toContain('No opening line announcing what you are about to do')
+      expect(text).toContain('no closing line recapping it or offering further help')
     }
   })
 
